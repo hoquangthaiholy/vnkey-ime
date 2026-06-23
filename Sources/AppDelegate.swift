@@ -7,7 +7,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var candidatesWindow: IMKCandidates?
     
     func applicationDidFinishLaunching(_ notification: Notification) {
-        let bundleID = Bundle.main.bundleIdentifier ?? "com.yourcompany.inputmethod.VnKey"
+        let bundleID = Bundle.main.bundleIdentifier ?? "com.ahtstudio.inputmethod.VnKey"
         let connectionName = bundleID + "_Connection"
         
         // Initialize the IMKServer

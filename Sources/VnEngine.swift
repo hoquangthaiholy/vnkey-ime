@@ -60,7 +60,7 @@ public class VnEngine {
     }
     
     // Processes a raw string typed so far and returns the translated Vietnamese word
-    public static func process(raw: String, method: InputMethod) -> String {
+    public static func process(raw: String, method: InputMethod, isNewToneStyle: Bool = true) -> String {
         if raw.isEmpty { return "" }
         
         // Preserve capitalization information
@@ -70,12 +70,23 @@ public class VnEngine {
         let normalizedRaw = raw.lowercased()
         var state = SyllableState()
         
+        // FSM rule: 'z' in Telex cancels the composition and restores raw string (without z)
+        if method == .telex && normalizedRaw.hasSuffix("z") && normalizedRaw.count > 1 {
+            return String(raw.dropLast())
+        }
+        
         // Pre-detect special consonant glides: "qu" and "gi"
         var remaining = normalizedRaw
         
         if remaining.hasPrefix("qu") {
             state.onset = "qu"
             remaining = String(remaining.dropFirst(2))
+        } else if remaining.hasPrefix("gii") {
+            // OpenKey FSM: gi + i -> gì
+            state.onset = "g"
+            state.vowels = "i"
+            state.tone = .huyen
+            remaining = String(remaining.dropFirst(3))
         } else if remaining.hasPrefix("gi") {
             // Check if there is another vowel after "gi" (e.g. "giang", "giúp")
             // If yes, then "gi" is the onset.
@@ -138,23 +149,17 @@ public class VnEngine {
                 // Telex late double-vowel modifier check (e.g. typing 'o' at the end of 'mọt' to get 'một')
                 var isDoubleVowelModifier = false
                 if method == .telex {
-                    if let lastVowel = state.vowels.last {
-                        if char == "a" {
-                            if lastVowel == "a" || lastVowel == "â" {
-                                isDoubleVowelModifier = true
-                            } else if state.vowels == "uay" || state.vowels == "uây" {
-                                isDoubleVowelModifier = true
-                            }
-                        } else if char == "e" {
-                            if lastVowel == "e" || lastVowel == "ê" {
-                                isDoubleVowelModifier = true
-                            }
-                        } else if char == "o" {
-                            if lastVowel == "o" || lastVowel == "ô" {
-                                isDoubleVowelModifier = true
-                            } else if state.vowels == "uoi" || state.vowels == "uôi" {
-                                isDoubleVowelModifier = true
-                            }
+                    if char == "a" {
+                        if state.vowels.contains("a") || state.vowels.contains("â") {
+                            isDoubleVowelModifier = true
+                        }
+                    } else if char == "e" {
+                        if state.vowels.contains("e") || state.vowels.contains("ê") {
+                            isDoubleVowelModifier = true
+                        }
+                    } else if char == "o" {
+                        if state.vowels.contains("o") || state.vowels.contains("ô") {
+                            isDoubleVowelModifier = true
                         }
                     }
                 }
@@ -253,7 +258,7 @@ public class VnEngine {
             finalVowels = "ươ"
         }
         if state.tone != .none && !finalVowels.isEmpty {
-            finalVowels = applyTone(to: finalVowels, coda: state.coda, tone: state.tone)
+            finalVowels = applyTone(to: finalVowels, coda: state.coda, tone: state.tone, isNewToneStyle: isNewToneStyle)
         }
         
         var result = state.onset + finalVowels + state.coda + state.literalSuffix
@@ -335,11 +340,23 @@ public class VnEngine {
     private static func handleDiacriticKey(_ char: Character, state: inout SyllableState, method: InputMethod) {
         if method == .telex {
             if char == "w" {
-                if state.whiskerApplied {
-                    // Revert whisker
-                    state.vowels = revertWhisker(state.vowels, onset: state.onset, coda: state.coda)
-                    state.whiskerApplied = false
+                if state.onset == "qu" && state.vowels.isEmpty {
+                    // OpenKey FSM: prevent qu + w -> qư
                     state.literalSuffix.append("w")
+                    return
+                }
+                
+                if state.whiskerApplied {
+                    // Try to apply further (e.g. ưo -> ươ)
+                    let modified = applyWhisker(state.vowels, onset: state.onset, coda: state.coda)
+                    if modified != state.vowels {
+                        state.vowels = modified
+                    } else {
+                        // Revert whisker
+                        state.vowels = revertWhisker(state.vowels, onset: state.onset, coda: state.coda)
+                        state.whiskerApplied = false
+                        state.literalSuffix.append("w")
+                    }
                 } else {
                     // Apply whisker
                     let modified = applyWhisker(state.vowels, onset: state.onset, coda: state.coda)
@@ -420,7 +437,7 @@ public class VnEngine {
     }
     
     private static func applyWhisker(_ vowels: String, onset: String, coda: String) -> String {
-        if vowels == "uo" {
+        if vowels == "uo" || vowels == "ưo" || vowels == "uơ" {
             // Vietnamese spelling rules for 'uo' + 'w':
             // - If onset is 'th' and there is no coda (e.g. 'thuở' -> typed 'thuowr'): uo + w -> uơ
             // - If onset is 'h' and there is no coda (e.g. 'huơ' -> typed 'huow'): uo + w -> uơ
@@ -463,30 +480,26 @@ public class VnEngine {
     }
     
     private static func applyHat(_ vowels: String) -> String {
-        if vowels == "ua" { return "uâ" }
-        if vowels == "ue" { return "uê" }
-        if vowels == "ie" { return "iê" }
-        if vowels == "a" { return "â" }
-        if vowels == "e" { return "ê" }
-        if vowels == "o" { return "ô" }
-        return vowels
+        var result = vowels
+        if let range = result.range(of: "a") { result.replaceSubrange(range, with: "â"); return result }
+        if let range = result.range(of: "e") { result.replaceSubrange(range, with: "ê"); return result }
+        if let range = result.range(of: "o") { result.replaceSubrange(range, with: "ô"); return result }
+        return result
     }
     
     private static func revertHat(_ vowels: String) -> String {
-        if vowels == "uâ" { return "ua" }
-        if vowels == "uê" { return "ue" }
-        if vowels == "iê" { return "ie" }
-        if vowels == "â" { return "a" }
-        if vowels == "ê" { return "e" }
-        if vowels == "ô" { return "o" }
-        return vowels
+        var result = vowels
+        if let range = result.range(of: "â") { result.replaceSubrange(range, with: "a"); return result }
+        if let range = result.range(of: "ê") { result.replaceSubrange(range, with: "e"); return result }
+        if let range = result.range(of: "ô") { result.replaceSubrange(range, with: "o"); return result }
+        return result
     }
     
     // MARK: - Tone Placement Algorithm
     
-    private static func applyTone(to vowels: String, coda: String, tone: Tone) -> String {
+    private static func applyTone(to vowels: String, coda: String, tone: Tone, isNewToneStyle: Bool) -> String {
         if vowels.isEmpty { return vowels }
-        let targetIndex = getToneVowelIndex(vowels: vowels, coda: coda)
+        let targetIndex = getToneVowelIndex(vowels: vowels, coda: coda, isNewToneStyle: isNewToneStyle)
         
         var chars = Array(vowels)
         if targetIndex < chars.count {
@@ -495,7 +508,7 @@ public class VnEngine {
         return String(chars)
     }
     
-    private static func getToneVowelIndex(vowels: String, coda: String) -> Int {
+    private static func getToneVowelIndex(vowels: String, coda: String, isNewToneStyle: Bool) -> Int {
         if vowels.count <= 1 { return 0 }
         
         let lower = vowels.lowercased()
@@ -547,19 +560,19 @@ public class VnEngine {
         if lower.contains("uy") {
             if let idx = lower.range(of: "uy")?.lowerBound {
                 let d = lower.distance(from: lower.startIndex, to: idx)
-                return d + 1 // tone on y
+                return (!isNewToneStyle && coda.isEmpty) ? d : d + 1
             }
         }
         if lower.contains("oa") {
             if let idx = lower.range(of: "oa")?.lowerBound {
                 let d = lower.distance(from: lower.startIndex, to: idx)
-                return d + 1 // tone on a
+                return (!isNewToneStyle && coda.isEmpty) ? d : d + 1
             }
         }
         if lower.contains("oe") {
             if let idx = lower.range(of: "oe")?.lowerBound {
                 let d = lower.distance(from: lower.startIndex, to: idx)
-                return d + 1 // tone on e
+                return (!isNewToneStyle && coda.isEmpty) ? d : d + 1
             }
         }
         

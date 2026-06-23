@@ -5,7 +5,9 @@ import InputMethodKit
 class VnInputController: IMKInputController {
     
     var rawBuffer = ""
-    var currentMethod: InputMethod = .telex
+    var currentMethod: InputMethod {
+        return Preferences.shared.inputMethod == .vni ? .vni : .telex
+    }
     
     // Lazy initialization of Autocomplete helper
     lazy var autocomplete: Autocomplete = Autocomplete()
@@ -74,18 +76,21 @@ class VnInputController: IMKInputController {
                 
                 // If Tab key is pressed, confirm the highlighted candidate
                 if keyCode == 48 || char == "\t" {
-                    let processed = VnEngine.process(raw: rawBuffer, method: currentMethod)
-                    let suggestions = autocomplete.getSuggestions(prefix: processed)
-                    if !suggestions.isEmpty {
-                        var index = candidatesWindow.selectedCandidate()
-                        if index < 0 || index >= suggestions.count {
-                            index = 0
+                    if Preferences.shared.showSuggestions {
+                        let processed = VnEngine.process(raw: rawBuffer, method: currentMethod, isNewToneStyle: Preferences.shared.isNewToneStyle)
+                        let suggestions = autocomplete.getSuggestions(prefix: processed)
+                        if !suggestions.isEmpty {
+                            var index = candidatesWindow.selectedCandidate()
+                            if index < 0 || index >= suggestions.count {
+                                index = 0
+                            }
+                            let selected = suggestions[index]
+                            let finalString = CharsetConverter.convert(selected, to: Preferences.shared.charset)
+                            client.insertText(finalString, replacementRange: NSMakeRange(NSNotFound, NSNotFound))
+                            rawBuffer = ""
+                            hideCandidates()
+                            return true
                         }
-                        let selected = suggestions[index]
-                        client.insertText(selected, replacementRange: NSMakeRange(NSNotFound, NSNotFound))
-                        rawBuffer = ""
-                        hideCandidates()
-                        return true
                     }
                 }
                 
@@ -127,8 +132,9 @@ class VnInputController: IMKInputController {
     // Commits the active composition to the client
     func commitComposition(_ client: IMKTextInput) {
         if !rawBuffer.isEmpty {
-            let processed = VnEngine.process(raw: rawBuffer, method: currentMethod)
-            client.insertText(processed, replacementRange: NSMakeRange(NSNotFound, NSNotFound))
+            let processed = VnEngine.process(raw: rawBuffer, method: currentMethod, isNewToneStyle: Preferences.shared.isNewToneStyle)
+            let finalString = CharsetConverter.convert(processed, to: Preferences.shared.charset)
+            client.insertText(finalString, replacementRange: NSMakeRange(NSNotFound, NSNotFound))
             rawBuffer = ""
             hideCandidates()
         }
@@ -136,24 +142,29 @@ class VnInputController: IMKInputController {
     
     // Updates the composition marking inline
     func updateComposition(_ client: IMKTextInput) {
-        let processed = VnEngine.process(raw: rawBuffer, method: currentMethod)
+        let processed = VnEngine.process(raw: rawBuffer, method: currentMethod, isNewToneStyle: Preferences.shared.isNewToneStyle)
+        let displayString = CharsetConverter.convert(processed, to: Preferences.shared.charset)
         
         let attributes: [NSAttributedString.Key: Any] = [
             .underlineStyle: NSUnderlineStyle.single.rawValue,
             .underlineColor: NSColor.clear
         ]
-        let markedString = NSAttributedString(string: processed, attributes: attributes)
+        let markedString = NSAttributedString(string: displayString, attributes: attributes)
         
         client.setMarkedText(
             markedString,
-            selectionRange: NSMakeRange(processed.utf16.count, 0),
+            selectionRange: NSMakeRange(displayString.utf16.count, 0),
             replacementRange: NSMakeRange(NSNotFound, NSNotFound)
         )
         
         // Update candidates window with suggestions
-        let suggestions = autocomplete.getSuggestions(prefix: processed)
-        if !suggestions.isEmpty {
-            showCandidates()
+        if Preferences.shared.showSuggestions {
+            let suggestions = autocomplete.getSuggestions(prefix: processed)
+            if !suggestions.isEmpty {
+                showCandidates()
+            } else {
+                hideCandidates()
+            }
         } else {
             hideCandidates()
         }
@@ -201,21 +212,16 @@ class VnInputController: IMKInputController {
     // MARK: - Input Source Mode Switching
     
     override func setValue(_ value: Any!, forTag tag: Int, client sender: Any!) {
-        if let modeString = value as? String {
-            NSLog("VnInputController switching mode to: \(modeString)")
-            if modeString.lowercased().contains("telex") {
-                currentMethod = .telex
-            } else if modeString.lowercased().contains("vni") {
-                currentMethod = .vni
-            }
-        }
+        // We no longer switch method based on system OS tag since we merged into one Input Source.
+        // We rely on our own Preferences.shared.inputMethod instead.
         super.setValue(value, forTag: tag, client: sender)
     }
     
     // MARK: - Autocomplete Candidates Delegates
     
     override func candidates(_ sender: Any!) -> [Any]! {
-        let processed = VnEngine.process(raw: rawBuffer, method: currentMethod)
+        if !Preferences.shared.showSuggestions { return [] }
+        let processed = VnEngine.process(raw: rawBuffer, method: currentMethod, isNewToneStyle: Preferences.shared.isNewToneStyle)
         return autocomplete.getSuggestions(prefix: processed)
     }
     
@@ -248,9 +254,124 @@ class VnInputController: IMKInputController {
     
     override func candidateSelected(_ candidateString: NSAttributedString!) {
         guard let client = client(), let selected = candidateString else { return }
-        client.insertText(selected.string, replacementRange: NSMakeRange(NSNotFound, NSNotFound))
+        let finalString = CharsetConverter.convert(selected.string, to: Preferences.shared.charset)
+        client.insertText(finalString, replacementRange: NSMakeRange(NSNotFound, NSNotFound))
         rawBuffer = ""
         hideCandidates()
+    }
+    
+    override func menu() -> NSMenu! {
+        let menu = NSMenu(title: "Tuỳ chọn")
+        
+        let methodMenuItem = NSMenuItem(title: "Kiểu gõ", action: nil, keyEquivalent: "")
+        let methodMenu = NSMenu(title: "Kiểu gõ")
+        
+        let telexItem = NSMenuItem(title: "Telex", action: #selector(setMethodTelex(_:)), keyEquivalent: "")
+        telexItem.target = self
+        telexItem.state = Preferences.shared.inputMethod == .telex ? .on : .off
+        methodMenu.addItem(telexItem)
+        
+        let vniItem = NSMenuItem(title: "VNI", action: #selector(setMethodVNI(_:)), keyEquivalent: "")
+        vniItem.target = self
+        vniItem.state = Preferences.shared.inputMethod == .vni ? .on : .off
+        methodMenu.addItem(vniItem)
+        
+        methodMenuItem.submenu = methodMenu
+        menu.addItem(methodMenuItem)
+        
+        menu.addItem(NSMenuItem.separator())
+
+        let charsetMenuItem = NSMenuItem(title: "Bảng mã", action: nil, keyEquivalent: "")
+        let charsetMenu = NSMenu(title: "Bảng mã")
+        
+        let charsetUnicode = NSMenuItem(title: "Unicode", action: #selector(setCharsetUnicode(_:)), keyEquivalent: "")
+        charsetUnicode.target = self
+        charsetUnicode.state = Preferences.shared.charset == .unicode ? .on : .off
+        charsetMenu.addItem(charsetUnicode)
+        
+        let charsetVNI = NSMenuItem(title: "VNI Windows", action: #selector(setCharsetVNIWindows(_:)), keyEquivalent: "")
+        charsetVNI.target = self
+        charsetVNI.state = Preferences.shared.charset == .vniWindows ? .on : .off
+        charsetMenu.addItem(charsetVNI)
+        
+        let charsetTCVN3 = NSMenuItem(title: "TCVN3 (ABC)", action: #selector(setCharsetTCVN3(_:)), keyEquivalent: "")
+        charsetTCVN3.target = self
+        charsetTCVN3.state = Preferences.shared.charset == .tcvn3 ? .on : .off
+        charsetMenu.addItem(charsetTCVN3)
+        
+        charsetMenuItem.submenu = charsetMenu
+        menu.addItem(charsetMenuItem)
+        
+        menu.addItem(NSMenuItem.separator())
+
+        let toneMenuItem = NSMenuItem(title: "Bỏ dấu", action: nil, keyEquivalent: "")
+        let toneMenu = NSMenu(title: "Bỏ dấu")
+        
+        let newStyleItem = NSMenuItem(title: "Kiểu mới (oà, uý)", action: #selector(setNewToneStyle(_:)), keyEquivalent: "")
+        newStyleItem.target = self
+        newStyleItem.state = Preferences.shared.isNewToneStyle ? .on : .off
+        toneMenu.addItem(newStyleItem)
+        
+        let oldStyleItem = NSMenuItem(title: "Kiểu cũ (òa, úy)", action: #selector(setOldToneStyle(_:)), keyEquivalent: "")
+        oldStyleItem.target = self
+        oldStyleItem.state = !Preferences.shared.isNewToneStyle ? .on : .off
+        toneMenu.addItem(oldStyleItem)
+        
+        toneMenuItem.submenu = toneMenu
+        menu.addItem(toneMenuItem)
+        
+        menu.addItem(NSMenuItem.separator())
+        
+        let accessibilityMenuItem = NSMenuItem(title: "Trợ năng", action: nil, keyEquivalent: "")
+        let accessibilityMenu = NSMenu(title: "Trợ năng")
+        
+        let suggestionsItem = NSMenuItem(title: "Hiện gợi ý từ", action: #selector(toggleSuggestions(_:)), keyEquivalent: "")
+        suggestionsItem.target = self
+        suggestionsItem.state = Preferences.shared.showSuggestions ? .on : .off
+        accessibilityMenu.addItem(suggestionsItem)
+        
+        accessibilityMenuItem.submenu = accessibilityMenu
+        menu.addItem(accessibilityMenuItem)
+        
+        return menu
+    }
+    
+    @objc func setMethodTelex(_ sender: Any?) {
+        Preferences.shared.inputMethod = .telex
+    }
+    
+    @objc func setMethodVNI(_ sender: Any?) {
+        Preferences.shared.inputMethod = .vni
+    }
+    
+    @objc func setCharsetUnicode(_ sender: Any?) {
+        Preferences.shared.charset = .unicode
+    }
+    
+    @objc func setCharsetVNIWindows(_ sender: Any?) {
+        Preferences.shared.charset = .vniWindows
+    }
+    
+    @objc func setCharsetTCVN3(_ sender: Any?) {
+        Preferences.shared.charset = .tcvn3
+    }
+    
+    @objc func setNewToneStyle(_ sender: Any?) {
+        NSLog("VnInputController setNewToneStyle")
+        Preferences.shared.isNewToneStyle = true
+    }
+    
+    @objc func setOldToneStyle(_ sender: Any?) {
+        NSLog("VnInputController setOldToneStyle")
+        Preferences.shared.isNewToneStyle = false
+    }
+    
+    @objc func toggleSuggestions(_ sender: Any?) {
+        NSLog("VnInputController toggleSuggestions called")
+        Preferences.shared.showSuggestions.toggle()
+        if !Preferences.shared.showSuggestions {
+            hideCandidates()
+        }
     }
 }
 

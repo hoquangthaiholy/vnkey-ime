@@ -3,23 +3,25 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleIdentifier</key>
-    <string>com.yourcompany.inputmethod.VnKey</string>
+    <string>com.ahtstudio.inputmethod.VnKey</string>
     <key>CFBundleName</key>
     <string>VnKey</string>
     <key>CFBundleDisplayName</key>
     <string>VnKey</string>
     <key>CFBundleExecutable</key>
     <string>VnKey</string>
+    <key>CFBundleIconFile</key>
+    <string>Icon.icns</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.0</string>
+    <string>1.1</string>
     <key>CFBundleVersion</key>
-    <string>1</string>
+    <string>3</string>
     <key>LSBackgroundOnly</key>
     <true/>
     <key>InputMethodConnectionName</key>
-    <string>com.yourcompany.inputmethod.VnKey_Connection</string>
+    <string>com.ahtstudio.inputmethod.VnKey_Connection</string>
     <key>InputMethodServerControllerClass</key>
     <string>VnInputController</string>
     <key>tsInputMethodCharacterRepertoireKey</key>
@@ -30,14 +32,14 @@
     <dict>
         <key>tsInputModeListKey</key>
         <dict>
-            <key>com.yourcompany.inputmethod.VnKey.telex</key>
+            <key>com.ahtstudio.inputmethod.VnKey.mac</key>
             <dict>
                 <key>tsInputModeIsActiveKey</key>
                 <true/>
                 <key>tsInputModeIsVisibleKey</key>
                 <true/>
                 <key>TISInputSourceID</key>
-                <string>com.yourcompany.inputmethod.VnKey.telex</string>
+                <string>com.ahtstudio.inputmethod.VnKey.mac</string>
                 <key>TISIntendedLanguage</key>
                 <string>vi</string>
                 <key>tsInputModeLanguagesKey</key>
@@ -48,31 +50,15 @@
                 <true/>
                 <key>tsInputModeScriptKey</key>
                 <string>smRoman</string>
-            </dict>
-            <key>com.yourcompany.inputmethod.VnKey.vni</key>
-            <dict>
-                <key>tsInputModeIsActiveKey</key>
-                <true/>
-                <key>tsInputModeIsVisibleKey</key>
-                <true/>
-                <key>TISInputSourceID</key>
-                <string>com.yourcompany.inputmethod.VnKey.vni</string>
-                <key>TISIntendedLanguage</key>
-                <string>vi</string>
-                <key>tsInputModeLanguagesKey</key>
-                <array>
-                    <string>vi</string>
-                </array>
-                <key>tsInputModePrimaryInScriptKey</key>
-                <true/>
-                <key>tsInputModeScriptKey</key>
-                <string>smRoman</string>
+                <key>tsInputModeMenuIconFileKey</key>
+                <string>IMEMenuIcon.tiff</string>
+                <key>tsInputModePaletteIconFileKey</key>
+                <string>IMEPaletteIcon.tiff</string>
             </dict>
         </dict>
         <key>tsVisibleInputModeOrderedArrayKey</key>
         <array>
-            <string>com.yourcompany.inputmethod.VnKey.telex</string>
-            <string>com.yourcompany.inputmethod.VnKey.vni</string>
+            <string>com.ahtstudio.inputmethod.VnKey.mac</string>
         </array>
     </dict>
 </dict>

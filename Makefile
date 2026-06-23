@@ -7,7 +7,7 @@ MACOS_DIR = $(BUNDLE)/Contents/MacOS
 RESOURCES_DIR = $(BUNDLE)/Contents/Resources
 INSTALL_DIR = $(HOME)/Library/Input\ Methods
 
-SOURCES = Sources/VnEngine.swift Sources/Autocomplete.swift Sources/AppDelegate.swift Sources/VnInputController.swift Sources/main.swift
+SOURCES = Sources/CharsetConverter.swift Sources/Preferences.swift Sources/VnEngine.swift Sources/Autocomplete.swift Sources/AppDelegate.swift Sources/VnInputController.swift Sources/main.swift
 
 .PHONY: all clean install reload uninstall
 
@@ -21,6 +21,11 @@ $(BUNDLE): $(SOURCES) Sources/Viet11K.txt Sources/Info.plist
 	@echo "Copying Info.plist and resources..."
 	@cp Sources/Info.plist $(BUNDLE)/Contents/Info.plist
 	@cp Sources/Viet11K.txt $(RESOURCES_DIR)/Viet11K.txt
+	@cp Sources/Assets/Icon.icns $(RESOURCES_DIR)/Icon.icns
+	@cp Sources/Assets/IMEMenuIcon.tiff $(RESOURCES_DIR)/IMEMenuIcon.tiff
+	@cp Sources/Assets/IMEMenuIcon@2x.tiff $(RESOURCES_DIR)/IMEMenuIcon@2x.tiff
+	@cp Sources/Assets/IMEPaletteIcon.tiff $(RESOURCES_DIR)/IMEPaletteIcon.tiff
+	@cp Sources/Assets/IMEPaletteIcon@2x.tiff $(RESOURCES_DIR)/IMEPaletteIcon@2x.tiff
 	@mkdir -p $(RESOURCES_DIR)/en.lproj
 	@mkdir -p $(RESOURCES_DIR)/vi.lproj
 	@cp Sources/en.lproj/InfoPlist.strings $(RESOURCES_DIR)/en.lproj/InfoPlist.strings

@@ -1,3 +1,4 @@
-"com.yourcompany.inputmethod.VnKey" = "VnKey";
-"com.yourcompany.inputmethod.VnKey.telex" = "VnKey (Telex)";
-"com.yourcompany.inputmethod.VnKey.vni" = "VnKey (VNI)";
+"com.ahtstudio.inputmethod.VnKey" = "";
+"com.ahtstudio.inputmethod.VnKey.mac" = "VnKey";
+"CFBundleName" = "Tuỳ chọn";
+"CFBundleDisplayName" = "";
