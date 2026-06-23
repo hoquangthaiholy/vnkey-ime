@@ -1,0 +1,16 @@
+# macOS
+.DS_Store
+
+# Swift/Makefile build directory
+.build/
+
+# Xcode user settings and state
+*.xcodeproj/*
+!*.xcodeproj/project.pbxproj
+!*.xcodeproj/xcshareddata/
+!*.xcodeproj/project.xcworkspace/
+*.xcworkspace/
+xcuserdata/
+
+# Swift Package Manager
+.swiftpm/

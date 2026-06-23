@@ -118,7 +118,7 @@ public class VnEngine {
                         isValidMod = true
                     } else if char == "7" && !state.vowels.isEmpty {
                         isValidMod = true
-                    } else if char == "8" && state.vowels.contains("a") {
+                    } else if char == "8" && (state.vowels.contains("a") || state.vowels.contains("ă")) {
                         isValidMod = true
                     } else if char == "9" {
                         if state.onset == "d" || (state.onset == "đ" && state.ddApplied) {
@@ -138,12 +138,14 @@ public class VnEngine {
                 // Telex late double-vowel modifier check (e.g. typing 'o' at the end of 'mọt' to get 'một')
                 var isDoubleVowelModifier = false
                 if method == .telex {
-                    if char == "a" && (state.vowels.contains("a") || state.vowels.contains("â")) {
-                        isDoubleVowelModifier = true
-                    } else if char == "e" && (state.vowels.contains("e") || state.vowels.contains("ê")) {
-                        isDoubleVowelModifier = true
-                    } else if char == "o" && (state.vowels.contains("o") || state.vowels.contains("ô")) {
-                        isDoubleVowelModifier = true
+                    if let lastVowel = state.vowels.last {
+                        if char == "a" && (lastVowel == "a" || lastVowel == "â") {
+                            isDoubleVowelModifier = true
+                        } else if char == "e" && (lastVowel == "e" || lastVowel == "ê") {
+                            isDoubleVowelModifier = true
+                        } else if char == "o" && (lastVowel == "o" || lastVowel == "ô") {
+                            isDoubleVowelModifier = true
+                        }
                     }
                 }
                 
@@ -154,34 +156,40 @@ public class VnEngine {
                     // Check Telex double-vowel rules before appending
                     if method == .telex {
                         if char == "a" {
-                            if state.vowels.contains("a") {
-                                state.vowels = state.vowels.replacingOccurrences(of: "a", with: "â")
+                            if state.vowels.last == "a" {
+                                state.vowels.removeLast()
+                                state.vowels.append("â")
                                 state.hatApplied = true
                                 continue
-                            } else if state.vowels.contains("â") && state.hatApplied {
-                                state.vowels = state.vowels.replacingOccurrences(of: "â", with: "a")
+                            } else if state.vowels.last == "â" && state.hatApplied {
+                                state.vowels.removeLast()
+                                state.vowels.append("a")
                                 state.hatApplied = false
                                 state.literalSuffix.append("a")
                                 continue
                             }
                         } else if char == "e" {
-                            if state.vowels.contains("e") {
-                                state.vowels = state.vowels.replacingOccurrences(of: "e", with: "ê")
+                            if state.vowels.last == "e" {
+                                state.vowels.removeLast()
+                                state.vowels.append("ê")
                                 state.hatApplied = true
                                 continue
-                            } else if state.vowels.contains("ê") && state.hatApplied {
-                                state.vowels = state.vowels.replacingOccurrences(of: "ê", with: "e")
+                            } else if state.vowels.last == "ê" && state.hatApplied {
+                                state.vowels.removeLast()
+                                state.vowels.append("e")
                                 state.hatApplied = false
                                 state.literalSuffix.append("e")
                                 continue
                             }
                         } else if char == "o" {
-                            if state.vowels.contains("o") {
-                                state.vowels = state.vowels.replacingOccurrences(of: "o", with: "ô")
+                            if state.vowels.last == "o" {
+                                state.vowels.removeLast()
+                                state.vowels.append("ô")
                                 state.hatApplied = true
                                 continue
-                            } else if state.vowels.contains("ô") && state.hatApplied {
-                                state.vowels = state.vowels.replacingOccurrences(of: "ô", with: "o")
+                            } else if state.vowels.last == "ô" && state.hatApplied {
+                                state.vowels.removeLast()
+                                state.vowels.append("o")
                                 state.hatApplied = false
                                 state.literalSuffix.append("o")
                                 continue
@@ -213,6 +221,9 @@ public class VnEngine {
         
         // Assemble parts and apply tone
         var finalVowels = state.vowels
+        if !state.coda.isEmpty && finalVowels == "uơ" {
+            finalVowels = "ươ"
+        }
         if state.tone != .none && !finalVowels.isEmpty {
             finalVowels = applyTone(to: finalVowels, coda: state.coda, tone: state.tone)
         }
@@ -298,12 +309,12 @@ public class VnEngine {
             if char == "w" {
                 if state.whiskerApplied {
                     // Revert whisker
-                    state.vowels = revertWhisker(state.vowels)
+                    state.vowels = revertWhisker(state.vowels, onset: state.onset, coda: state.coda)
                     state.whiskerApplied = false
                     state.literalSuffix.append("w")
                 } else {
                     // Apply whisker
-                    let modified = applyWhisker(state.vowels)
+                    let modified = applyWhisker(state.vowels, onset: state.onset, coda: state.coda)
                     if modified != state.vowels {
                         state.vowels = modified
                         state.whiskerApplied = true
@@ -341,11 +352,11 @@ public class VnEngine {
                 }
             case "7": // Whisker (o -> ơ, u -> ư)
                 if state.whiskerApplied {
-                    state.vowels = revertWhisker(state.vowels)
+                    state.vowels = revertWhisker(state.vowels, onset: state.onset, coda: state.coda)
                     state.whiskerApplied = false
                     state.literalSuffix.append("7")
                 } else {
-                    let modified = applyWhisker(state.vowels)
+                    let modified = applyWhisker(state.vowels, onset: state.onset, coda: state.coda)
                     if modified != state.vowels {
                         state.vowels = modified
                         state.whiskerApplied = true
@@ -380,8 +391,20 @@ public class VnEngine {
         }
     }
     
-    private static func applyWhisker(_ vowels: String) -> String {
-        if vowels == "uo" { return "ươ" }
+    private static func applyWhisker(_ vowels: String, onset: String, coda: String) -> String {
+        if vowels == "uo" {
+            // Vietnamese spelling rules for 'uo' + 'w':
+            // - If onset is 'th' and there is no coda (e.g. 'thuở' -> typed 'thuowr'): uo + w -> uơ
+            // - If onset is 'h' and there is no coda (e.g. 'huơ' -> typed 'huow'): uo + w -> uơ
+            // - If onset is 'qu' and there is no coda (e.g. 'quơ' -> typed 'quow'): uo + w -> uơ
+            // - Otherwise: uo + w -> ươ
+            if coda.isEmpty {
+                if onset == "th" || onset == "h" || onset == "qu" {
+                    return "uơ"
+                }
+            }
+            return "ươ"
+        }
         if vowels == "ua" { return "ưa" }
         if vowels == "oa" { return "oă" }
         if vowels == "oi" { return "ơi" }
@@ -395,8 +418,9 @@ public class VnEngine {
         return vowels
     }
     
-    private static func revertWhisker(_ vowels: String) -> String {
+    private static func revertWhisker(_ vowels: String, onset: String, coda: String) -> String {
         if vowels == "ươ" { return "uo" }
+        if vowels == "uơ" { return "uo" }
         if vowels == "ưa" { return "ua" }
         if vowels == "oă" { return "oa" }
         if vowels == "ơi" { return "oi" }
@@ -484,8 +508,8 @@ public class VnEngine {
                 return d + 2 // tone on ê
             }
         }
-        if lower.contains("oai") || lower.contains("oay") || lower.contains("oao") {
-            if let idx = lower.range(of: "oa")?.lowerBound {
+        if lower.contains("oai") || lower.contains("oay") || lower.contains("oao") || lower.contains("uay") {
+            if let idx = lower.range(of: "oa")?.lowerBound ?? lower.range(of: "ua")?.lowerBound {
                 let d = lower.distance(from: lower.startIndex, to: idx)
                 return d + 1 // tone on a
             }

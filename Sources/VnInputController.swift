@@ -31,11 +31,14 @@ class VnInputController: IMKInputController {
             return false
         }
         
-        // If there is an active text selection in the client application, clear our composition buffer
-        let selectedRange = client.selectedRange()
-        if selectedRange.location != NSNotFound && selectedRange.length > 0 {
-            rawBuffer = ""
-            hideCandidates()
+        // If there is an active text selection in the client application, clear our composition buffer.
+        // We only perform this synchronous IPC check if rawBuffer is not empty to eliminate typing latency at word start.
+        if !rawBuffer.isEmpty {
+            let selectedRange = client.selectedRange()
+            if selectedRange.location != NSNotFound && selectedRange.length > 0 {
+                rawBuffer = ""
+                hideCandidates()
+            }
         }
         
         guard let characters = event.characters, !characters.isEmpty else {
