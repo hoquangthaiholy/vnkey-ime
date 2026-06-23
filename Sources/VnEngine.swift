@@ -97,13 +97,13 @@ public class VnEngine {
             let isCharVowel = isVowel(char)
             
             // 1. Check if it's a tone key
-            if isToneKey(char, method: method) && !state.vowels.isEmpty {
+            if isToneKey(char, method: method) && !state.vowels.isEmpty && state.literalSuffix.isEmpty {
                 handleToneKey(char, state: &state, method: method)
                 continue
             }
             
             // 2. Check if it's a diacritic modifier key
-            if isDiacriticKey(char, method: method) {
+            if isDiacriticKey(char, method: method) && state.literalSuffix.isEmpty {
                 var isValidMod = false
                 if method == .telex {
                     if char == "w" && !state.vowels.isEmpty {
@@ -139,12 +139,22 @@ public class VnEngine {
                 var isDoubleVowelModifier = false
                 if method == .telex {
                     if let lastVowel = state.vowels.last {
-                        if char == "a" && (lastVowel == "a" || lastVowel == "â") {
-                            isDoubleVowelModifier = true
-                        } else if char == "e" && (lastVowel == "e" || lastVowel == "ê") {
-                            isDoubleVowelModifier = true
-                        } else if char == "o" && (lastVowel == "o" || lastVowel == "ô") {
-                            isDoubleVowelModifier = true
+                        if char == "a" {
+                            if lastVowel == "a" || lastVowel == "â" {
+                                isDoubleVowelModifier = true
+                            } else if state.vowels == "uay" || state.vowels == "uây" {
+                                isDoubleVowelModifier = true
+                            }
+                        } else if char == "e" {
+                            if lastVowel == "e" || lastVowel == "ê" {
+                                isDoubleVowelModifier = true
+                            }
+                        } else if char == "o" {
+                            if lastVowel == "o" || lastVowel == "ô" {
+                                isDoubleVowelModifier = true
+                            } else if state.vowels == "uoi" || state.vowels == "uôi" {
+                                isDoubleVowelModifier = true
+                            }
                         }
                     }
                 }
@@ -154,7 +164,7 @@ public class VnEngine {
                     state.literalSuffix.append(char)
                 } else {
                     // Check Telex double-vowel rules before appending
-                    if method == .telex {
+                    if method == .telex && isDoubleVowelModifier {
                         if char == "a" {
                             if state.vowels.last == "a" {
                                 state.vowels.removeLast()
@@ -164,6 +174,15 @@ public class VnEngine {
                             } else if state.vowels.last == "â" && state.hatApplied {
                                 state.vowels.removeLast()
                                 state.vowels.append("a")
+                                state.hatApplied = false
+                                state.literalSuffix.append("a")
+                                continue
+                            } else if state.vowels.contains("a") {
+                                state.vowels = state.vowels.replacingOccurrences(of: "a", with: "â")
+                                state.hatApplied = true
+                                continue
+                            } else if state.vowels.contains("â") && state.hatApplied {
+                                state.vowels = state.vowels.replacingOccurrences(of: "â", with: "a")
                                 state.hatApplied = false
                                 state.literalSuffix.append("a")
                                 continue
@@ -190,6 +209,15 @@ public class VnEngine {
                             } else if state.vowels.last == "ô" && state.hatApplied {
                                 state.vowels.removeLast()
                                 state.vowels.append("o")
+                                state.hatApplied = false
+                                state.literalSuffix.append("o")
+                                continue
+                            } else if state.vowels.contains("o") {
+                                state.vowels = state.vowels.replacingOccurrences(of: "o", with: "ô")
+                                state.hatApplied = true
+                                continue
+                            } else if state.vowels.contains("ô") && state.hatApplied {
+                                state.vowels = state.vowels.replacingOccurrences(of: "ô", with: "o")
                                 state.hatApplied = false
                                 state.literalSuffix.append("o")
                                 continue
