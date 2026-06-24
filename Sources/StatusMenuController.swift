@@ -1,4 +1,5 @@
 import Cocoa
+import Carbon
 
 /// Manages an NSStatusItem that lives entirely within the VnKey process.
 ///
@@ -21,9 +22,16 @@ class StatusMenuController: NSObject {
     /// Call once from AppDelegate.applicationDidFinishLaunching to install the status item.
     func setup() {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        item.button?.font = NSFont.systemFont(ofSize: 13, weight: .medium)
         item.menu = buildMenu()
         statusItem = item
+        
+        DistributedNotificationCenter.default().addObserver(
+            self,
+            selector: #selector(inputSourceChanged),
+            name: NSNotification.Name(kTISNotifySelectedKeyboardInputSourceChanged as String),
+            object: nil
+        )
+        
         updateButton()
     }
 
@@ -34,15 +42,72 @@ class StatusMenuController: NSObject {
         updateButton()
     }
 
+    @objc private func inputSourceChanged() {
+        updateButton()
+    }
+
+    private func isVnKeyActive() -> Bool {
+        let currentSource = TISCopyCurrentKeyboardInputSource().takeRetainedValue()
+        if let idPtr = TISGetInputSourceProperty(currentSource, kTISPropertyInputSourceID) {
+            let id = Unmanaged<CFString>.fromOpaque(idPtr).takeUnretainedValue() as String
+            let myBundleID = Bundle.main.bundleIdentifier ?? "com.ahtstudio.inputmethod.VnKey"
+            // The actual input source ID defined in Info.plist has a ".mac" suffix
+            return id == myBundleID || id == "\(myBundleID).mac"
+        }
+        return false
+    }
+
+    private func createIconImage(text: String, isActive: Bool) -> NSImage {
+        let font = NSFont.systemFont(ofSize: 11, weight: .medium)
+        let alpha: CGFloat = isActive ? 1.0 : 0.4
+        let color = NSColor.black.withAlphaComponent(alpha)
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: font,
+            .foregroundColor: color
+        ]
+        
+        let textSize = text.size(withAttributes: attributes)
+        let paddingX: CGFloat = 8.0 // extra padding for radius 8
+        let rectSize = NSSize(width: textSize.width + paddingX * 2, height: textSize.height + 4.0)
+        
+        // Add a margin to prevent the stroke from clipping at the edges
+        let marginX: CGFloat = 1.0
+        
+        // Standard menubar height is 22
+        let imageSize = NSSize(width: rectSize.width + marginX * 2, height: 22)
+        let image = NSImage(size: imageSize)
+        
+        image.lockFocus()
+        
+        // Center the rect
+        let rectY = (imageSize.height - rectSize.height) / 2.0
+        let roundedRect = NSRect(x: marginX, y: rectY, width: rectSize.width, height: rectSize.height)
+        let path = NSBezierPath(roundedRect: roundedRect, xRadius: 8, yRadius: 8)
+        
+        color.setStroke()
+        path.lineWidth = 1.0
+        path.stroke()
+        
+        // Draw text centered
+        let textY = rectY + (rectSize.height - textSize.height) / 2.0
+        let textRect = NSRect(x: marginX + paddingX, y: textY, width: textSize.width, height: textSize.height)
+        text.draw(in: textRect, withAttributes: attributes)
+        
+        image.unlockFocus()
+        image.isTemplate = true
+        return image
+    }
+
     private func updateButton() {
         let name: String
         switch Preferences.shared.inputMethod {
         case .telex:        name = "Telex"
-        case .simpleTelex:  name = "Simple Telex"
-        case .simpleTelex2: name = "Simple Telex 2"
+        case .simpleTelex:  name = "SimpleTelex"
+        case .simpleTelex2: name = "SimpleTelex2"
         case .vni:          name = "VNI"
         }
-        statusItem?.button?.title = name
+        statusItem?.button?.title = ""
+        statusItem?.button?.image = createIconImage(text: name, isActive: isVnKeyActive())
         statusItem?.button?.toolTip = "VnKey — Bảng mã: \(Preferences.shared.charset.rawValue)"
     }
 
