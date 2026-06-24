@@ -2,13 +2,22 @@ import Foundation
 
 public enum InputMethodType: String {
     case telex = "telex"
+    case simpleTelex = "simpleTelex"
+    case simpleTelex2 = "simpleTelex2"
     case vni = "vni"
 }
 
 public enum CharsetType: String {
     case unicode = "unicode"
+    case unicodeComposed = "unicodeComposed"
     case vniWindows = "vniWindows"
     case tcvn3 = "tcvn3"
+    case viqr = "viqr"
+    case vps = "vps"
+    case vniMac = "vniMac"
+    case bkhcm1 = "bkhcm1"
+    case bkhcm2 = "bkhcm2"
+    case cp1258 = "cp1258"
 }
 
 public struct Preferences {
@@ -21,6 +30,8 @@ public struct Preferences {
         static let showSuggestions = "showSuggestions"
         static let inputMethod = "inputMethod"
         static let charset = "charset"
+        static let enableEnglishFSM = "enableEnglishFSM"
+        static let enableProgrammingFSM = "enableProgrammingFSM"
     }
     
     public var isNewToneStyle: Bool {
@@ -44,6 +55,30 @@ public struct Preferences {
         }
         set {
             defaults.set(newValue, forKey: Keys.showSuggestions)
+        }
+    }
+    
+    public var enableEnglishFSM: Bool {
+        get {
+            if defaults.object(forKey: Keys.enableEnglishFSM) == nil {
+                return true // default to enabled
+            }
+            return defaults.bool(forKey: Keys.enableEnglishFSM)
+        }
+        set {
+            defaults.set(newValue, forKey: Keys.enableEnglishFSM)
+        }
+    }
+    
+    public var enableProgrammingFSM: Bool {
+        get {
+            if defaults.object(forKey: Keys.enableProgrammingFSM) == nil {
+                return true // default to enabled
+            }
+            return defaults.bool(forKey: Keys.enableProgrammingFSM)
+        }
+        set {
+            defaults.set(newValue, forKey: Keys.enableProgrammingFSM)
         }
     }
     

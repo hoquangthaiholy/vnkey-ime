@@ -7,7 +7,7 @@ MACOS_DIR = $(BUNDLE)/Contents/MacOS
 RESOURCES_DIR = $(BUNDLE)/Contents/Resources
 INSTALL_DIR = $(HOME)/Library/Input\ Methods
 
-SOURCES = Sources/CharsetConverter.swift Sources/Preferences.swift Sources/VnEngine.swift Sources/Autocomplete.swift Sources/AppDelegate.swift Sources/VnInputController.swift Sources/main.swift
+SOURCES = Sources/CharsetConverter.swift Sources/Preferences.swift Sources/VnEngine.swift Sources/Autocomplete.swift Sources/AppDelegate.swift Sources/StatusMenuController.swift Sources/VnInputController.swift Sources/main.swift
 
 .PHONY: all clean install reload uninstall
 
@@ -42,6 +42,8 @@ install: all
 	@echo "Registering input source by launching the app..."
 	@# Launch the app once to trigger TISRegisterInputSource
 	@open $(INSTALL_DIR)/$(APP_NAME).app
+	killall -9 TextInputMenuAgent
+	killall -9 TextInputSwitcher
 	@echo "Installation complete!"
 	@echo "Please restart active applications or log out/log in if the input source does not show up immediately."
 	@echo "You can enable VnKey in System Settings > Keyboard > Input Sources > +."

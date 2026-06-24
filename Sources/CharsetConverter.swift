@@ -93,6 +93,36 @@ public class CharsetConverter {
     ]
     // Note: TCVN3 uppercase mapping above is simplified for basic demonstration since full TCVN3 uppercase is complex and rarely used now.
     // In a production app, we would use a full exact byte mapping for TCVN3 uppercase.
+    
+    // VIQR
+    static let viqrStrs: [String] = [
+        "a", "a`", "a'", "a?", "a~", "a.",
+        "a(", "a(`", "a('", "a(?", "a(~", "a(.",
+        "a^", "a^`", "a^'", "a^?", "a^~", "a^.",
+        "e", "e`", "e'", "e?", "e~", "e.",
+        "e^", "e^`", "e^'", "e^?", "e^~", "e^.",
+        "i", "i`", "i'", "i?", "i~", "i.",
+        "o", "o`", "o'", "o?", "o~", "o.",
+        "o^", "o^`", "o^'", "o^?", "o^~", "o^.",
+        "o+", "o+`", "o+'", "o+?", "o+~", "o+.",
+        "u", "u`", "u'", "u?", "u~", "u.",
+        "u+", "u+`", "u+'", "u+?", "u+~", "u+.",
+        "y", "y`", "y'", "y?", "y~", "y.",
+        "dd",
+        "A", "A`", "A'", "A?", "A~", "A.",
+        "A(", "A(`", "A('", "A(?", "A(~", "A(.",
+        "A^", "A^`", "A^'", "A^?", "A^~", "A^.",
+        "E", "E`", "E'", "E?", "E~", "E.",
+        "E^", "E^`", "E^'", "E^?", "E^~", "E^.",
+        "I", "I`", "I'", "I?", "I~", "I.",
+        "O", "O`", "O'", "O?", "O~", "O.",
+        "O^", "O^`", "O^'", "O^?", "O^~", "O^.",
+        "O+", "O+`", "O+'", "O+?", "O+~", "O+.",
+        "U", "U`", "U'", "U?", "U~", "U.",
+        "U+", "U+`", "U+'", "U+?", "U+~", "U+.",
+        "Y", "Y`", "Y'", "Y?", "Y~", "Y.",
+        "DD"
+    ]
 
     static var vniMap: [Character: String] = {
         var map = [Character: String]()
@@ -110,14 +140,29 @@ public class CharsetConverter {
         return map
     }()
 
+    static var viqrMap: [Character: String] = {
+        var map = [Character: String]()
+        for (i, char) in unicodeChars.enumerated() {
+            map[char] = viqrStrs[i]
+        }
+        return map
+    }()
+
     public static func convert(_ text: String, to charset: CharsetType) -> String {
         switch charset {
         case .unicode:
             return text
+        case .unicodeComposed:
+            return text.decomposedStringWithCanonicalMapping
         case .vniWindows:
             return text.map { vniMap[$0] ?? String($0) }.joined()
         case .tcvn3:
             return text.map { tcvn3Map[$0] ?? String($0) }.joined()
+        case .viqr:
+            return text.map { viqrMap[$0] ?? String($0) }.joined()
+        // For rare charsets, fallback to unicode until mappings are fully loaded
+        case .vps, .vniMac, .bkhcm1, .bkhcm2, .cp1258:
+            return text
         }
     }
 }

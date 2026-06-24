@@ -2,6 +2,8 @@ import Foundation
 
 public enum InputMethod {
     case telex
+    case simpleTelex
+    case simpleTelex2
     case vni
 }
 
@@ -55,6 +57,26 @@ public class VnEngine {
         "y": ["y", "ý", "ỳ", "ỷ", "ỹ", "ỵ"]
     ]
     
+    private static let validOnsets: Set<String> = [
+        "", "b", "c", "ch", "d", "đ", "g", "gh", "gi", "h", "k", "kh", "l", "m", "n", "ng", "ngh", "nh", "p", "ph", "q", "qu", "r", "s", "t", "th", "tr", "v", "x"
+    ]
+    
+    private static let validCodas: Set<String> = [
+        "", "c", "ch", "m", "n", "ng", "nh", "p", "t", "o", "u", "y", "i"
+    ]
+    
+    private static let validVowelClusters: Set<String> = [
+        "a", "ă", "â", "e", "ê", "i", "o", "ô", "ơ", "u", "ư", "y",
+        "ai", "ao", "au", "ay", "âu", "ây", "eo", "êu", "ia", "iê", "iu", "oa", "oă", "oe", "oi", "ôi", "ơi", "oo", "ôô", "ua", "uâ", "uê", "ui", "uô", "uơ", "uy", "ưa", "ưi", "ươ", "ưu", "ya", "yê",
+        "iêu", "oai", "oao", "oay", "uay", "uây", "uôi", "uya", "uyê", "uyu", "ươi", "ươu", "yêu"
+    ]
+    
+    // JS, TS, PHP Keywords
+    private static let programmingKeywords: Set<String> = [
+        "break", "case", "catch", "class", "const", "continue", "debugger", "default", "delete", "do", "else", "export", "extends", "finally", "for", "function", "if", "import", "in", "instanceof", "new", "return", "super", "switch", "this", "throw", "try", "typeof", "var", "void", "while", "with", "yield", "let", "static", "enum", "await", "async", "implements", "interface", "package", "private", "protected", "public", "type", "namespace", "module", "declare", "any", "boolean", "number", "string", "symbol",
+        "abstract", "and", "array", "as", "callable", "clone", "die", "echo", "elseif", "empty", "enddeclare", "endfor", "endforeach", "endif", "endswitch", "endwhile", "eval", "exit", "final", "fn", "foreach", "global", "goto", "include", "include_once", "insteadof", "isset", "list", "match", "or", "print", "readonly", "require", "require_once", "trait", "unset", "use", "xor"
+    ]
+    
     public static func isVowel(_ char: Character) -> Bool {
         return vowelSet.contains(char)
     }
@@ -68,10 +90,16 @@ public class VnEngine {
         let isFirstUpper = raw.first?.isUppercase ?? false
         
         let normalizedRaw = raw.lowercased()
+        
+        // FSM: Programming Keywords Check
+        if Preferences.shared.enableProgrammingFSM && programmingKeywords.contains(normalizedRaw) {
+            return raw
+        }
+        
         var state = SyllableState()
         
         // FSM rule: 'z' in Telex cancels the composition and restores raw string (without z)
-        if method == .telex && normalizedRaw.hasSuffix("z") && normalizedRaw.count > 1 {
+        if (method == .telex || method == .simpleTelex || method == .simpleTelex2) && normalizedRaw.hasSuffix("z") && normalizedRaw.count > 1 {
             return String(raw.dropLast())
         }
         
@@ -116,8 +144,16 @@ public class VnEngine {
             // 2. Check if it's a diacritic modifier key
             if isDiacriticKey(char, method: method) && state.literalSuffix.isEmpty {
                 var isValidMod = false
-                if method == .telex {
-                    if char == "w" && !state.vowels.isEmpty {
+                if method == .telex || method == .simpleTelex || method == .simpleTelex2 {
+                    if char == "w" {
+                        if method == .telex {
+                            isValidMod = true // In standard Telex, 'w' always generates 'ư'
+                        } else {
+                            if !state.vowels.isEmpty {
+                                isValidMod = true // In Simple Telex, 'w' must follow a vowel
+                            }
+                        }
+                    } else if char == "[" || char == "]" {
                         isValidMod = true
                     } else if char == "d" {
                         if state.onset == "d" || (state.onset == "đ" && state.ddApplied) {
@@ -148,7 +184,7 @@ public class VnEngine {
             if isCharVowel {
                 // Telex late double-vowel modifier check (e.g. typing 'o' at the end of 'mọt' to get 'một')
                 var isDoubleVowelModifier = false
-                if method == .telex {
+                if method == .telex || method == .simpleTelex || method == .simpleTelex2 {
                     if char == "a" {
                         if state.vowels.contains("a") || state.vowels.contains("â") {
                             isDoubleVowelModifier = true
@@ -169,7 +205,7 @@ public class VnEngine {
                     state.literalSuffix.append(char)
                 } else {
                     // Check Telex double-vowel rules before appending
-                    if method == .telex && isDoubleVowelModifier {
+                    if (method == .telex || method == .simpleTelex || method == .simpleTelex2) && isDoubleVowelModifier {
                         if char == "a" {
                             if state.vowels.last == "a" {
                                 state.vowels.removeLast()
@@ -235,9 +271,11 @@ public class VnEngine {
                 // Consonant
                 if state.vowels.isEmpty {
                     // Still in the onset
-                    if method == .telex && char == "d" && state.onset == "d" {
+                    if (method == .telex || method == .simpleTelex || method == .simpleTelex2) && char == "d" && state.onset == "d" {
                         state.onset = "đ"
                         state.ddApplied = true
+                    } else if (method == .telex || method == .simpleTelex || method == .simpleTelex2) && char == "w" && method == .telex {
+                        state.vowels.append("ư")
                     } else {
                         state.onset.append(char)
                     }
@@ -263,6 +301,13 @@ public class VnEngine {
         
         var result = state.onset + finalVowels + state.coda + state.literalSuffix
         
+        // FSM: English Check (Invalid Vietnamese Syllable)
+        if Preferences.shared.enableEnglishFSM {
+            if !isValidVietnameseSyllable(onset: state.onset, vowels: state.vowels, coda: state.coda, literalSuffix: state.literalSuffix) {
+                return raw
+            }
+        }
+        
         // Restore capitalization
         if isAllUpper {
             result = result.uppercased()
@@ -277,9 +322,29 @@ public class VnEngine {
     
     // MARK: - Helper Methods
     
+    private static func isValidVietnameseSyllable(onset: String, vowels: String, coda: String, literalSuffix: String) -> Bool {
+        if !literalSuffix.isEmpty {
+            return false // Any unprocessed literal characters mean it's not a standard Vietnamese syllable
+        }
+        if !validOnsets.contains(onset) {
+            return false
+        }
+        if !validCodas.contains(coda) {
+            return false
+        }
+        if !vowels.isEmpty && !validVowelClusters.contains(vowels) {
+            return false
+        }
+        // If vowels are empty but there's a coda, or other malformed combinations
+        if vowels.isEmpty && (!coda.isEmpty || !onset.isEmpty) {
+            return false
+        }
+        return true
+    }
+    
     private static func isToneKey(_ char: Character, method: InputMethod) -> Bool {
         switch method {
-        case .telex:
+        case .telex, .simpleTelex, .simpleTelex2:
             switch char {
             case "s", "f", "r", "x", "j", "z": return true
             default: return false
@@ -294,7 +359,9 @@ public class VnEngine {
     
     private static func isDiacriticKey(_ char: Character, method: InputMethod) -> Bool {
         switch method {
-        case .telex:
+        case .telex, .simpleTelex:
+            return char == "w" || char == "d" || char == "[" || char == "]"
+        case .simpleTelex2:
             return char == "w" || char == "d"
         case .vni:
             switch char {
@@ -307,7 +374,7 @@ public class VnEngine {
     private static func handleToneKey(_ char: Character, state: inout SyllableState, method: InputMethod) {
         let newTone: Tone
         switch method {
-        case .telex:
+        case .telex, .simpleTelex, .simpleTelex2:
             switch char {
             case "s": newTone = .sac
             case "f": newTone = .huyen
@@ -338,7 +405,7 @@ public class VnEngine {
     }
     
     private static func handleDiacriticKey(_ char: Character, state: inout SyllableState, method: InputMethod) {
-        if method == .telex {
+        if method == .telex || method == .simpleTelex || method == .simpleTelex2 {
             if char == "w" {
                 if state.onset == "qu" && state.vowels.isEmpty {
                     // OpenKey FSM: prevent qu + w -> qư
@@ -366,6 +433,20 @@ public class VnEngine {
                     } else {
                         state.literalSuffix.append("w")
                     }
+                }
+            } else if char == "[" {
+                let modified = applyO(state.vowels, onset: state.onset, coda: state.coda)
+                if modified != state.vowels {
+                    state.vowels = modified
+                } else {
+                    state.literalSuffix.append("[")
+                }
+            } else if char == "]" {
+                let modified = applyU(state.vowels, onset: state.onset, coda: state.coda)
+                if modified != state.vowels {
+                    state.vowels = modified
+                } else {
+                    state.literalSuffix.append("]")
                 }
             } else if char == "d" {
                 if state.onset == "d" {
@@ -434,6 +515,18 @@ public class VnEngine {
                 break
             }
         }
+    }
+    
+    private static func applyU(_ vowels: String, onset: String, coda: String) -> String {
+        if vowels == "u" { return "ư" }
+        if vowels == "o" { return "ơ" }
+        return vowels
+    }
+    
+    private static func applyO(_ vowels: String, onset: String, coda: String) -> String {
+        if vowels == "o" { return "ơ" }
+        if vowels == "u" { return "ư" }
+        return vowels
     }
     
     private static func applyWhisker(_ vowels: String, onset: String, coda: String) -> String {
