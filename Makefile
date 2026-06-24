@@ -17,19 +17,18 @@ $(BUNDLE): $(SOURCES) Sources/Viet11K.txt Sources/Info.plist
 	@echo "Compiling Swift files..."
 	@mkdir -p $(MACOS_DIR)
 	@mkdir -p $(RESOURCES_DIR)
-	swiftc -O $(SOURCES) -o $(MACOS_DIR)/$(APP_NAME)
+	swiftc -Osize -Xlinker -dead_strip $(SOURCES) -o $(MACOS_DIR)/$(APP_NAME)
 	@echo "Copying Info.plist and resources..."
 	@cp Sources/Info.plist $(BUNDLE)/Contents/Info.plist
 	@cp Sources/Viet11K.txt $(RESOURCES_DIR)/Viet11K.txt
-	@cp Sources/Assets/Icon.icns $(RESOURCES_DIR)/Icon.icns
-	@cp Sources/Assets/IMEMenuIcon.tiff $(RESOURCES_DIR)/IMEMenuIcon.tiff
-	@cp Sources/Assets/IMEMenuIcon@2x.tiff $(RESOURCES_DIR)/IMEMenuIcon@2x.tiff
-	@cp Sources/Assets/IMEPaletteIcon.tiff $(RESOURCES_DIR)/IMEPaletteIcon.tiff
-	@cp Sources/Assets/IMEPaletteIcon@2x.tiff $(RESOURCES_DIR)/IMEPaletteIcon@2x.tiff
-	@mkdir -p $(RESOURCES_DIR)/en.lproj
+	@cp Sources/Assets/IMEMenuIcon.png $(RESOURCES_DIR)/IMEMenuIcon.png
+	@cp Sources/Assets/IMEMenuIcon@2x.png $(RESOURCES_DIR)/IMEMenuIcon@2x.png
+		@mkdir -p $(RESOURCES_DIR)/en.lproj
 	@mkdir -p $(RESOURCES_DIR)/vi.lproj
 	@cp Sources/en.lproj/InfoPlist.strings $(RESOURCES_DIR)/en.lproj/InfoPlist.strings
 	@cp Sources/vi.lproj/InfoPlist.strings $(RESOURCES_DIR)/vi.lproj/InfoPlist.strings
+	@echo "Stripping binary..."
+	strip $(MACOS_DIR)/$(APP_NAME)
 	@echo "Signing the bundle..."
 	codesign -f -s - $(BUNDLE)
 	@echo "Build successful: $(BUNDLE)"

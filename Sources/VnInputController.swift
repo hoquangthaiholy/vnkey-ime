@@ -63,8 +63,8 @@ class VnInputController: IMKInputController {
         }
     }
 
-    // Lazy initialization of Autocomplete helper
-    lazy var autocomplete: Autocomplete = Autocomplete()
+    // Use shared Autocomplete helper to avoid duplicate memory and parsing overhead
+    var autocomplete: Autocomplete { return Autocomplete.shared }
 
     // Intercept keyboard events from the client application
     override func handle(_ event: NSEvent!, client sender: Any!) -> Bool {
@@ -78,23 +78,12 @@ class VnInputController: IMKInputController {
         }
 
         // Pass shortcuts (Command, Control, Option modifiers) through to the client.
-        // We clear the rawBuffer and hide candidates so we don't interfere with the shortcut.
+        // We commit the active composition so we don't lose the word being typed.
         if event.modifierFlags.contains(.command) ||
            event.modifierFlags.contains(.control) ||
            event.modifierFlags.contains(.option) {
-            rawBuffer = ""
-            hideCandidates()
+            commitComposition(client)
             return false
-        }
-
-        // If there is an active text selection in the client application, clear our composition buffer.
-        // We only perform this synchronous IPC check if rawBuffer is not empty to eliminate typing latency at word start.
-        if !rawBuffer.isEmpty {
-            let selectedRange = client.selectedRange()
-            if selectedRange.location != NSNotFound && selectedRange.length > 0 {
-                rawBuffer = ""
-                hideCandidates()
-            }
         }
 
         guard let characters = event.characters, !characters.isEmpty else {
@@ -161,7 +150,14 @@ class VnInputController: IMKInputController {
             }
         }
 
-        // 3. Handle Space, Return, Tab, Punctuation (Word Breakers)
+        // 3. Handle Navigation keys (Arrow keys, Home, End, Page Up, Page Down)
+        let navigationKeyCodes: Set<UInt16> = [115, 116, 119, 121, 123, 124, 125, 126]
+        if navigationKeyCodes.contains(keyCode) {
+            commitComposition(client)
+            return false
+        }
+
+        // 4. Handle Space, Return, Tab, Punctuation (Word Breakers)
         if char.isWhitespace || char.isNewline || char == "\t" || isPunctuation(char) {
             if !rawBuffer.isEmpty {
                 commitComposition(client)
@@ -171,7 +167,7 @@ class VnInputController: IMKInputController {
             return false
         }
 
-        // 4. Handle Alphanumeric characters
+        // 5. Handle Alphanumeric characters
         if char.isLetter || char.isNumber {
             rawBuffer.append(char)
             updateComposition(client)
@@ -184,7 +180,8 @@ class VnInputController: IMKInputController {
     }
 
     // Commits the active composition to the client
-    func commitComposition(_ client: IMKTextInput) {
+    override func commitComposition(_ sender: Any!) {
+        guard let client = sender as? IMKTextInput else { return }
         if !rawBuffer.isEmpty {
             let processed = VnEngine.process(raw: rawBuffer, method: currentMethod, isNewToneStyle: Preferences.shared.isNewToneStyle)
             let finalString = CharsetConverter.convert(processed, to: Preferences.shared.charset)
@@ -328,110 +325,7 @@ class VnInputController: IMKInputController {
     }
 
     override func menu() -> NSMenu! {
-        NSLog("VNKEY_MENU_DEBUG menu created")
-        debugMenu("menu created")
-        let menu = NSMenu(title: "Tuỳ chọn")
-
-        // Use AppDelegate (NSApp.delegate) as the action target.
-        // AppDelegate lives for the entire process lifetime — it cannot be
-        // deallocated the way individual VnInputController instances can, so
-        // XPC action messages from TextInputMenuAgent will always find it.
-        menu.autoenablesItems = false
-        let appDelegate = NSApplication.shared.delegate!
-
-        func actionItem(title: String, action: Selector, tag: Int = 0, state: NSControl.StateValue) -> NSMenuItem {
-            let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
-            item.target = appDelegate
-            item.tag = tag
-            item.state = state
-            item.isEnabled = true
-            return item
-        }
-
-        let methodMenuItem = NSMenuItem(title: "Kiểu gõ", action: nil, keyEquivalent: "")
-        let inputMethodMenu = NSMenu(title: "Kiểu gõ")
-        inputMethodMenu.autoenablesItems = false
-        let currentInputMethod = currentMethod
-
-        let telexItem = actionItem(title: "Telex", action: #selector(AppDelegate.setInputMethod(_:)), tag: 101, state: currentInputMethod == .telex ? .on : .off)
-        inputMethodMenu.addItem(telexItem)
-
-        let simpleTelexItem = actionItem(title: "Simple Telex", action: #selector(AppDelegate.setInputMethod(_:)), tag: 102, state: currentInputMethod == .simpleTelex ? .on : .off)
-        inputMethodMenu.addItem(simpleTelexItem)
-
-        let simpleTelex2Item = actionItem(title: "Simple Telex 2", action: #selector(AppDelegate.setInputMethod(_:)), tag: 103, state: currentInputMethod == .simpleTelex2 ? .on : .off)
-        inputMethodMenu.addItem(simpleTelex2Item)
-
-        let vniItem = actionItem(title: "VNI", action: #selector(AppDelegate.setInputMethod(_:)), tag: 104, state: currentInputMethod == .vni ? .on : .off)
-        inputMethodMenu.addItem(vniItem)
-
-        methodMenuItem.submenu = inputMethodMenu
-        menu.addItem(methodMenuItem)
-
-        menu.addItem(NSMenuItem.separator())
-
-        let charsetMenuItem = NSMenuItem(title: "Bảng mã", action: nil, keyEquivalent: "")
-        let charsetMenu = NSMenu(title: "Bảng mã")
-        charsetMenu.autoenablesItems = false
-        let currentCharsetStr = Preferences.shared.charset.rawValue
-
-        let charsets: [(String, CharsetType, Int)] = [
-            ("Unicode", .unicode, 201),
-            ("Unicode Tổ hợp", .unicodeComposed, 202),
-            ("VNI Windows", .vniWindows, 203),
-            ("TCVN3 (ABC)", .tcvn3, 204),
-            ("VIQR", .viqr, 205),
-            ("VPS", .vps, 206),
-            ("VNI Mac", .vniMac, 207),
-            ("Bách Khoa HCM 1", .bkhcm1, 208),
-            ("Bách Khoa HCM 2", .bkhcm2, 209),
-            ("CP 1258", .cp1258, 210)
-        ]
-
-        for (title, type, tag) in charsets {
-            let item = actionItem(title: title, action: #selector(AppDelegate.setCharset(_:)), tag: tag, state: currentCharsetStr == type.rawValue ? .on : .off)
-            charsetMenu.addItem(item)
-        }
-
-        charsetMenuItem.submenu = charsetMenu
-        menu.addItem(charsetMenuItem)
-
-        menu.addItem(NSMenuItem.separator())
-
-        let toneMenuItem = NSMenuItem(title: "Bỏ dấu", action: nil, keyEquivalent: "")
-        let toneMenu = NSMenu(title: "Bỏ dấu")
-        toneMenu.autoenablesItems = false
-
-        let newStyleItem = actionItem(title: "Kiểu mới (oà, uý)", action: #selector(AppDelegate.setNewToneStyle(_:)), tag: 301, state: Preferences.shared.isNewToneStyle ? .on : .off)
-        toneMenu.addItem(newStyleItem)
-
-        let oldStyleItem = actionItem(title: "Kiểu cũ (òa, úy)", action: #selector(AppDelegate.setOldToneStyle(_:)), tag: 302, state: !Preferences.shared.isNewToneStyle ? .on : .off)
-        toneMenu.addItem(oldStyleItem)
-
-        toneMenuItem.submenu = toneMenu
-        menu.addItem(toneMenuItem)
-
-        menu.addItem(NSMenuItem.separator())
-
-        let accessibilityMenuItem = NSMenuItem(title: "Trợ năng", action: nil, keyEquivalent: "")
-        let accessibilityMenu = NSMenu(title: "Trợ năng")
-        accessibilityMenu.autoenablesItems = false
-
-        let suggestionsItem = actionItem(title: "Hiện gợi ý từ", action: #selector(AppDelegate.toggleSuggestions(_:)), tag: 401, state: Preferences.shared.showSuggestions ? .on : .off)
-        accessibilityMenu.addItem(suggestionsItem)
-
-        accessibilityMenu.addItem(NSMenuItem.separator())
-
-        let englishFSMItem = actionItem(title: "Kiểm tra tiếng Anh", action: #selector(AppDelegate.toggleEnglishFSM(_:)), tag: 402, state: Preferences.shared.enableEnglishFSM ? .on : .off)
-        accessibilityMenu.addItem(englishFSMItem)
-
-        let progFSMItem = actionItem(title: "Kiểm tra từ khoá lập trình", action: #selector(AppDelegate.toggleProgrammingFSM(_:)), tag: 403, state: Preferences.shared.enableProgrammingFSM ? .on : .off)
-        accessibilityMenu.addItem(progFSMItem)
-
-        accessibilityMenuItem.submenu = accessibilityMenu
-        menu.addItem(accessibilityMenuItem)
-
-        return menu
+        return nil
     }
 
     @objc func setInputMethod(_ sender: NSMenuItem) {

@@ -10,8 +10,6 @@
     <string>VnKey</string>
     <key>CFBundleExecutable</key>
     <string>VnKey</string>
-    <key>CFBundleIconFile</key>
-    <string>Icon.icns</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
@@ -51,9 +49,7 @@
                 <key>tsInputModeScriptKey</key>
                 <string>smRoman</string>
                 <key>tsInputModeMenuIconFileKey</key>
-                <string>IMEMenuIcon.tiff</string>
-                <key>tsInputModePaletteIconFileKey</key>
-                <string>IMEPaletteIcon.tiff</string>
+                <string>IMEMenuIcon.png</string>
             </dict>
         </dict>
         <key>tsVisibleInputModeOrderedArrayKey</key>

@@ -7,6 +7,7 @@ public struct AutocompleteWord {
 }
 
 public class Autocomplete {
+    public static let shared = Autocomplete()
     private var words: [AutocompleteWord] = []
     
     // Pre-computed prefix maps for O(1) autocomplete lookups

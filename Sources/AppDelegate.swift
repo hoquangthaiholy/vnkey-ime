@@ -11,6 +11,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     weak var currentController: VnInputController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Pre-warm Autocomplete dictionary on a background thread so it doesn't freeze the first keystroke
+        DispatchQueue.global(qos: .utility).async {
+            _ = Autocomplete.shared
+        }
+        
         let bundleID = Bundle.main.bundleIdentifier ?? "com.ahtstudio.inputmethod.VnKey"
         let connectionName = bundleID + "_Connection"
 
