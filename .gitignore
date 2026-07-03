@@ -4,6 +4,7 @@
 
 # Swift/Makefile build directory
 .build/
+.build-tests/
 
 # Xcode user settings and state
 *.xcodeproj/*

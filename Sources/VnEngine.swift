@@ -216,6 +216,7 @@ public class VnEngine {
                                 state.vowels.removeLast()
                                 state.vowels.append("a")
                                 state.hatApplied = false
+                                state.hasExplicitCancel = true
                                 state.literalSuffix.append("a")
                                 continue
                             } else if state.vowels.contains("a") {
@@ -225,6 +226,7 @@ public class VnEngine {
                             } else if state.vowels.contains("â") && state.hatApplied {
                                 state.vowels = state.vowels.replacingOccurrences(of: "â", with: "a")
                                 state.hatApplied = false
+                                state.hasExplicitCancel = true
                                 state.literalSuffix.append("a")
                                 continue
                             }
@@ -238,6 +240,7 @@ public class VnEngine {
                                 state.vowels.removeLast()
                                 state.vowels.append("e")
                                 state.hatApplied = false
+                                state.hasExplicitCancel = true
                                 state.literalSuffix.append("e")
                                 continue
                             }
@@ -251,6 +254,7 @@ public class VnEngine {
                                 state.vowels.removeLast()
                                 state.vowels.append("o")
                                 state.hatApplied = false
+                                state.hasExplicitCancel = true
                                 state.literalSuffix.append("o")
                                 continue
                             } else if state.vowels.contains("o") {
@@ -260,6 +264,7 @@ public class VnEngine {
                             } else if state.vowels.contains("ô") && state.hatApplied {
                                 state.vowels = state.vowels.replacingOccurrences(of: "ô", with: "o")
                                 state.hatApplied = false
+                                state.hasExplicitCancel = true
                                 state.literalSuffix.append("o")
                                 continue
                             }

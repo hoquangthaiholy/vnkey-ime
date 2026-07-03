@@ -9,7 +9,9 @@ INSTALL_DIR = $(HOME)/Library/Input\ Methods
 
 SOURCES = Sources/Preferences.swift Sources/VnEngine.swift Sources/Autocomplete.swift Sources/AppDelegate.swift Sources/StatusMenuController.swift Sources/VnInputController.swift Sources/main.swift
 
-.PHONY: all clean install reload uninstall
+TEST_BUILD_DIR = .build-tests
+
+.PHONY: all clean install reload uninstall test
 
 all: $(BUNDLE)
 
@@ -63,5 +65,8 @@ uninstall:
 	-killall -9 TextInputSwitcher 2>/dev/null || true
 	@echo "VnKey has been successfully uninstalled."
 
+test:
+	swift test --build-path $(TEST_BUILD_DIR)
+
 clean:
-	rm -rf $(BUILD_DIR)
+	rm -rf $(BUILD_DIR) $(TEST_BUILD_DIR)
