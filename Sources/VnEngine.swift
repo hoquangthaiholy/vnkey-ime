@@ -2,8 +2,6 @@ import Foundation
 
 public enum InputMethod {
     case telex
-    case simpleTelex
-    case simpleTelex2
     case vni
 }
 
@@ -25,7 +23,22 @@ public struct SyllableState {
     // Track applied modifiers to support toggling/cancelling
     public var hatApplied: Bool = false
     public var whiskerApplied: Bool = false
+    public var breveApplied: Bool = false
     public var ddApplied: Bool = false
+
+    // True if the currently-active tone was applied while coda was still empty
+    // (prefix-style, e.g. Telex "tan" typed as t-a-s-n) rather than after coda
+    // consonants already existed (postfix-style, e.g. "tans"). Lets a cancelled
+    // tone key reinsert its revived literal character on the correct side of coda.
+    public var toneAppliedBeforeCoda: Bool = false
+
+    // True only when the user explicitly cancelled an *active* tone/diacritic
+    // modifier by pressing its key again (e.g. Telex "tests", VNI "van11").
+    // A non-empty literalSuffix from this is trustworthy — `result` already
+    // reconstructs the intended literal text. A non-empty literalSuffix from
+    // an ordinary "this doesn't look like Vietnamese anymore" overflow (no
+    // active modifier was ever reverted) is not, and should fall back to `raw`.
+    public var hasExplicitCancel: Bool = false
     
     // When a modifier is cancelled or not applicable, we store it literally
     public var literalSuffix: String = ""
@@ -71,12 +84,6 @@ public class VnEngine {
         "iêu", "oai", "oao", "oay", "uay", "uây", "uôi", "uya", "uyê", "uyu", "ươi", "ươu", "yêu"
     ]
     
-    // JS, TS, PHP Keywords
-    private static let programmingKeywords: Set<String> = [
-        "break", "case", "catch", "class", "const", "continue", "debugger", "default", "delete", "do", "else", "export", "extends", "finally", "for", "function", "if", "import", "in", "instanceof", "new", "return", "super", "switch", "this", "throw", "try", "typeof", "var", "void", "while", "with", "yield", "let", "static", "enum", "await", "async", "implements", "interface", "package", "private", "protected", "public", "type", "namespace", "module", "declare", "any", "boolean", "number", "string", "symbol",
-        "abstract", "and", "array", "as", "callable", "clone", "die", "echo", "elseif", "empty", "enddeclare", "endfor", "endforeach", "endif", "endswitch", "endwhile", "eval", "exit", "final", "fn", "foreach", "global", "goto", "include", "include_once", "insteadof", "isset", "list", "match", "or", "print", "readonly", "require", "require_once", "trait", "unset", "use", "xor"
-    ]
-    
     public static func isVowel(_ char: Character) -> Bool {
         return vowelSet.contains(char)
     }
@@ -90,16 +97,11 @@ public class VnEngine {
         let isFirstUpper = raw.first?.isUppercase ?? false
         
         let normalizedRaw = raw.lowercased()
-        
-        // FSM: Programming Keywords Check
-        if Preferences.shared.enableProgrammingFSM && programmingKeywords.contains(normalizedRaw) {
-            return raw
-        }
-        
+
         var state = SyllableState()
         
         // FSM rule: 'z' in Telex cancels the composition and restores raw string (without z)
-        if (method == .telex || method == .simpleTelex || method == .simpleTelex2) && normalizedRaw.hasSuffix("z") && normalizedRaw.count > 1 {
+        if method == .telex && normalizedRaw.hasSuffix("z") && normalizedRaw.count > 1 {
             return String(raw.dropLast())
         }
         
@@ -144,17 +146,15 @@ public class VnEngine {
             // 2. Check if it's a diacritic modifier key
             if isDiacriticKey(char, method: method) && state.literalSuffix.isEmpty {
                 var isValidMod = false
-                if method == .telex || method == .simpleTelex || method == .simpleTelex2 {
+                if method == .telex {
                     if char == "w" {
-                        if method == .telex {
-                            isValidMod = true // In standard Telex, 'w' always generates 'ư'
-                        } else {
-                            if !state.vowels.isEmpty {
-                                isValidMod = true // In Simple Telex, 'w' must follow a vowel
-                            }
+                        if Preferences.shared.telexWAnywhere {
+                            isValidMod = true // 'w' always generates 'ư', even with no vowel yet
+                        } else if !state.vowels.isEmpty {
+                            isValidMod = true // 'w' must follow a vowel
                         }
                     } else if char == "[" || char == "]" {
-                        isValidMod = true
+                        isValidMod = true // isDiacriticKey already gated this on telexBrackets
                     } else if char == "d" {
                         if state.onset == "d" || (state.onset == "đ" && state.ddApplied) {
                             isValidMod = true
@@ -184,7 +184,7 @@ public class VnEngine {
             if isCharVowel {
                 // Telex late double-vowel modifier check (e.g. typing 'o' at the end of 'mọt' to get 'một')
                 var isDoubleVowelModifier = false
-                if method == .telex || method == .simpleTelex || method == .simpleTelex2 {
+                if method == .telex {
                     if char == "a" {
                         if state.vowels.contains("a") || state.vowels.contains("â") {
                             isDoubleVowelModifier = true
@@ -205,7 +205,7 @@ public class VnEngine {
                     state.literalSuffix.append(char)
                 } else {
                     // Check Telex double-vowel rules before appending
-                    if (method == .telex || method == .simpleTelex || method == .simpleTelex2) && isDoubleVowelModifier {
+                    if method == .telex && isDoubleVowelModifier {
                         if char == "a" {
                             if state.vowels.last == "a" {
                                 state.vowels.removeLast()
@@ -271,11 +271,9 @@ public class VnEngine {
                 // Consonant
                 if state.vowels.isEmpty {
                     // Still in the onset
-                    if (method == .telex || method == .simpleTelex || method == .simpleTelex2) && char == "d" && state.onset == "d" {
+                    if method == .telex && char == "d" && state.onset == "d" {
                         state.onset = "đ"
                         state.ddApplied = true
-                    } else if (method == .telex || method == .simpleTelex || method == .simpleTelex2) && char == "w" && method == .telex {
-                        state.vowels.append("ư")
                     } else {
                         state.onset.append(char)
                     }
@@ -301,10 +299,19 @@ public class VnEngine {
         
         var result = state.onset + finalVowels + state.coda + state.literalSuffix
         
-        // FSM: English Check (Invalid Vietnamese Syllable)
-        if Preferences.shared.enableEnglishFSM {
+        // Restore mistyped Vietnamese: if the syllable doesn't look like valid Vietnamese,
+        // fall back to what was actually typed instead of a garbled transformation.
+        if Preferences.shared.restoreMistypedVietnamese {
             if !isValidVietnameseSyllable(onset: state.onset, vowels: state.vowels, coda: state.coda, literalSuffix: state.literalSuffix) {
-                return raw
+                // Only trust the already-assembled `result` when the syllable looks invalid
+                // *solely* because the user explicitly cancelled an active tone/diacritic key
+                // (e.g. typing "s" twice in Telex to escape it) — `result` correctly collapses
+                // that cancel keystroke into the intended literal character. Otherwise (e.g. a
+                // long English word like "compressor" that never triggered a cancel but still
+                // picked up a stray tone/diacritic mid-word), fall back to the untouched `raw`.
+                if !state.hasExplicitCancel {
+                    return raw
+                }
             }
         }
         
@@ -344,7 +351,7 @@ public class VnEngine {
     
     private static func isToneKey(_ char: Character, method: InputMethod) -> Bool {
         switch method {
-        case .telex, .simpleTelex, .simpleTelex2:
+        case .telex:
             switch char {
             case "s", "f", "r", "x", "j", "z": return true
             default: return false
@@ -356,13 +363,13 @@ public class VnEngine {
             }
         }
     }
-    
+
     private static func isDiacriticKey(_ char: Character, method: InputMethod) -> Bool {
         switch method {
-        case .telex, .simpleTelex:
-            return char == "w" || char == "d" || char == "[" || char == "]"
-        case .simpleTelex2:
-            return char == "w" || char == "d"
+        case .telex:
+            if char == "w" || char == "d" { return true }
+            if char == "[" || char == "]" { return Preferences.shared.telexBrackets }
+            return false
         case .vni:
             switch char {
             case "6", "7", "8", "9": return true
@@ -370,11 +377,11 @@ public class VnEngine {
             }
         }
     }
-    
+
     private static func handleToneKey(_ char: Character, state: inout SyllableState, method: InputMethod) {
         let newTone: Tone
         switch method {
-        case .telex, .simpleTelex, .simpleTelex2:
+        case .telex:
             switch char {
             case "s": newTone = .sac
             case "f": newTone = .huyen
@@ -395,24 +402,44 @@ public class VnEngine {
         }
         
         if state.tone == newTone && newTone != .none {
-            // Toggle/Cancel tone: remove tone and append literal key
+            // Toggle/Cancel tone: reinsert the revived literal character on whichever side
+            // of the coda matches how it was originally typed. If the tone was applied before
+            // any coda existed (prefix-style), the coda came later and must follow the revived
+            // char (Telex "tests": trigger "s", coda "t", cancel "s" -> "st" -> "test", not
+            // "tets"). If the tone was applied onto an already-existing coda (postfix-style,
+            // tone typed at the end), the coda came first (Telex "chungss" -> "ngs" -> "chungs").
             state.tone = .none
-            state.literalSuffix.append(char)
+            state.hasExplicitCancel = true
+            if state.toneAppliedBeforeCoda {
+                state.literalSuffix = String(char) + state.coda
+            } else {
+                state.literalSuffix = state.coda + String(char)
+            }
+            state.coda = ""
         } else {
             // Apply new tone
+            state.toneAppliedBeforeCoda = state.coda.isEmpty
             state.tone = newTone
         }
     }
     
     private static func handleDiacriticKey(_ char: Character, state: inout SyllableState, method: InputMethod) {
-        if method == .telex || method == .simpleTelex || method == .simpleTelex2 {
+        if method == .telex {
             if char == "w" {
                 if state.onset == "qu" && state.vowels.isEmpty {
                     // OpenKey FSM: prevent qu + w -> qư
                     state.literalSuffix.append("w")
                     return
                 }
-                
+
+                if state.vowels.isEmpty {
+                    // No existing vowel to convert — 'w' creates a fresh 'ư' outright.
+                    // Only reached when telexWAnywhere is on (isValidMod gates this).
+                    state.vowels = "ư"
+                    state.whiskerApplied = true
+                    return
+                }
+
                 if state.whiskerApplied {
                     // Try to apply further (e.g. ưo -> ươ)
                     let modified = applyWhisker(state.vowels, onset: state.onset, coda: state.coda)
@@ -422,6 +449,7 @@ public class VnEngine {
                         // Revert whisker
                         state.vowels = revertWhisker(state.vowels, onset: state.onset, coda: state.coda)
                         state.whiskerApplied = false
+                        state.hasExplicitCancel = true
                         state.literalSuffix.append("w")
                     }
                 } else {
@@ -455,6 +483,7 @@ public class VnEngine {
                 } else if state.onset == "đ" && state.ddApplied {
                     state.onset = "d"
                     state.ddApplied = false
+                    state.hasExplicitCancel = true
                     state.literalSuffix.append("d")
                 } else {
                     state.literalSuffix.append("d")
@@ -466,6 +495,7 @@ public class VnEngine {
                 if state.hatApplied {
                     state.vowels = revertHat(state.vowels)
                     state.hatApplied = false
+                    state.hasExplicitCancel = true
                     state.literalSuffix.append("6")
                 } else {
                     let modified = applyHat(state.vowels)
@@ -480,6 +510,7 @@ public class VnEngine {
                 if state.whiskerApplied {
                     state.vowels = revertWhisker(state.vowels, onset: state.onset, coda: state.coda)
                     state.whiskerApplied = false
+                    state.hasExplicitCancel = true
                     state.literalSuffix.append("7")
                 } else {
                     let modified = applyWhisker(state.vowels, onset: state.onset, coda: state.coda)
@@ -493,9 +524,11 @@ public class VnEngine {
             case "8": // Breve (a -> ă)
                 if state.vowels.contains("a") {
                     state.vowels = state.vowels.replacingOccurrences(of: "a", with: "ă")
-                    state.whiskerApplied = true // Treat breve as whisker/breve toggle
+                    state.breveApplied = true
                 } else if state.vowels.contains("ă") {
                     state.vowels = state.vowels.replacingOccurrences(of: "ă", with: "a")
+                    state.breveApplied = false
+                    state.hasExplicitCancel = true
                     state.literalSuffix.append("8")
                 } else {
                     state.literalSuffix.append("8")
@@ -507,6 +540,7 @@ public class VnEngine {
                 } else if state.onset == "đ" && state.ddApplied {
                     state.onset = "d"
                     state.ddApplied = false
+                    state.hasExplicitCancel = true
                     state.literalSuffix.append("9")
                 } else {
                     state.literalSuffix.append("9")

@@ -7,7 +7,7 @@ MACOS_DIR = $(BUNDLE)/Contents/MacOS
 RESOURCES_DIR = $(BUNDLE)/Contents/Resources
 INSTALL_DIR = $(HOME)/Library/Input\ Methods
 
-SOURCES = Sources/CharsetConverter.swift Sources/Preferences.swift Sources/VnEngine.swift Sources/Autocomplete.swift Sources/AppDelegate.swift Sources/StatusMenuController.swift Sources/VnInputController.swift Sources/main.swift
+SOURCES = Sources/Preferences.swift Sources/VnEngine.swift Sources/Autocomplete.swift Sources/AppDelegate.swift Sources/StatusMenuController.swift Sources/VnInputController.swift Sources/main.swift
 
 .PHONY: all clean install reload uninstall
 

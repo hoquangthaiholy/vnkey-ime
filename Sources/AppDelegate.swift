@@ -66,48 +66,4 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    // MARK: - Menu actions (target for all IMK menu items)
-    //
-    // AppDelegate lives for the entire process lifetime, so IMK can reliably
-    // route XPC-delivered menu-item actions to it.  Each method simply
-    // forwards to the currently-active VnInputController.
-
-    @objc func setInputMethod(_ sender: NSMenuItem) {
-        NSLog("VNKEY_MENU_DEBUG AppDelegate setInputMethod tag=\(sender.tag)")
-        currentController?.setInputMethod(sender)
-    }
-
-    @objc func setCharset(_ sender: NSMenuItem) {
-        NSLog("VNKEY_MENU_DEBUG AppDelegate setCharset tag=\(sender.tag)")
-        currentController?.setCharset(sender)
-    }
-
-    @objc func setNewToneStyle(_ sender: Any?) {
-        NSLog("VNKEY_MENU_DEBUG AppDelegate setNewToneStyle")
-        currentController?.setNewToneStyle(sender)
-    }
-
-    @objc func setOldToneStyle(_ sender: Any?) {
-        NSLog("VNKEY_MENU_DEBUG AppDelegate setOldToneStyle")
-        currentController?.setOldToneStyle(sender)
-    }
-
-    @objc func toggleSuggestions(_ sender: Any?) {
-        NSLog("VNKEY_MENU_DEBUG AppDelegate toggleSuggestions")
-        currentController?.toggleSuggestions(sender)
-    }
-
-    @objc func toggleEnglishFSM(_ sender: Any?) {
-        NSLog("VNKEY_MENU_DEBUG AppDelegate toggleEnglishFSM")
-        currentController?.toggleEnglishFSM(sender)
-    }
-
-    @objc func toggleProgrammingFSM(_ sender: Any?) {
-        NSLog("VNKEY_MENU_DEBUG AppDelegate toggleProgrammingFSM")
-        currentController?.toggleProgrammingFSM(sender)
-    }
-
-    @objc func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
-        return currentController?.validateMenuItem(menuItem) ?? true
-    }
 }
