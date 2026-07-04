@@ -251,18 +251,17 @@ class VnInputController: IMKInputController {
         let predicted = NextWordPredictor.shared.predictNextWords(after: lastCommittedWord)
         guard !predicted.isEmpty else { return }
         pendingNextWordSuggestions = predicted
-        // Confirmed (via logging + direct visual testing) that neither an empty
-        // nor a real, visible marked-text preview renders here — candidates()/
-        // showCandidates() both fire correctly but nothing ever appears.
-        // Root cause: this call happens in the same synchronous pass as
-        // commitComposition's insertText just above it, and the client only
-        // applies one text-mutating UI update per keyDown-handling turn. Defer to
-        // the next run-loop iteration so it lands in its own turn instead.
-        let preview = predicted[0]
+        // Root cause (confirmed via logging + direct visual testing): this call
+        // happens in the same synchronous pass as commitComposition's insertText
+        // just above it, and the client only applies one text-mutating UI update
+        // per keyDown-handling turn — so nothing rendered regardless of content.
+        // Deferring to the next run-loop iteration is what actually fixes
+        // visibility; the marked text itself stays empty (an invisible anchor)
+        // rather than previewing the predicted word, so nothing is shown as if
+        // already typed — only the candidate list itself, confirmed with Tab.
         DispatchQueue.main.async { [weak self] in
             guard let self = self, self.pendingNextWordSuggestions == predicted else { return }
-            let markedString = NSAttributedString(string: preview, attributes: Self.underlineAttributes)
-            client.setMarkedText(markedString, selectionRange: NSMakeRange(preview.utf16.count, 0), replacementRange: NSMakeRange(NSNotFound, NSNotFound))
+            client.setMarkedText("", selectionRange: NSMakeRange(0, 0), replacementRange: NSMakeRange(NSNotFound, NSNotFound))
             self.showCandidates()
         }
     }
