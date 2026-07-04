@@ -17,6 +17,15 @@ class StatusMenuController: NSObject {
         super.init()
     }
 
+    /// The app's real icon (AppIcon.icns), used for the About panel and the
+    /// reset-confirmation alert. This is an LSUIElement agent, so NSApp
+    /// doesn't automatically surface CFBundleIconFile the way a normal app's
+    /// Dock icon would — load it directly from the bundle instead.
+    private static var appIcon: NSImage? {
+        guard let path = Bundle.main.path(forResource: "AppIcon", ofType: "icns") else { return nil }
+        return NSImage(contentsOfFile: path)
+    }
+
     // MARK: - Public API
 
     /// Call once from AppDelegate.applicationDidFinishLaunching to install the status item.
@@ -273,6 +282,9 @@ class StatusMenuController: NSObject {
         alert.addButton(withTitle: "Xoá")
         alert.addButton(withTitle: "Huỷ")
         alert.alertStyle = .warning
+        if let icon = Self.appIcon {
+            alert.icon = icon
+        }
         NSApp.activate(ignoringOtherApps: true)
         guard alert.runModal() == .alertFirstButtonReturn else { return }
         NextWordPredictor.shared.reset()
@@ -343,12 +355,16 @@ class StatusMenuController: NSObject {
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
         let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "?"
         NSApp.activate(ignoringOtherApps: true)
-        NSApp.orderFrontStandardAboutPanel(options: [
+        var options: [NSApplication.AboutPanelOptionKey: Any] = [
             .applicationName: "VnKey",
             .applicationVersion: version,
             .version: build,
             .credits: NSAttributedString(string: "Bộ gõ tiếng Việt cho macOS.\nHỗ trợ Telex, VNI, gõ tắt và gợi ý từ.\n⌘⇧Space để bật/tắt tiếng Việt.")
-        ])
+        ]
+        if let icon = Self.appIcon {
+            options[.applicationIcon] = icon
+        }
+        NSApp.orderFrontStandardAboutPanel(options: options)
     }
 
     @objc private func handleQuit(_ sender: NSMenuItem) {
