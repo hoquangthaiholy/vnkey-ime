@@ -267,6 +267,14 @@ class StatusMenuController: NSObject {
     }
 
     @objc private func handleResetNextWordPrediction(_ sender: NSMenuItem) {
+        let alert = NSAlert()
+        alert.messageText = "Xoá dữ liệu học gợi ý?"
+        alert.informativeText = "Toàn bộ từ đã học từ thói quen gõ của bạn sẽ bị xoá, chỉ còn lại các gợi ý mặc định. Không thể hoàn tác."
+        alert.addButton(withTitle: "Xoá")
+        alert.addButton(withTitle: "Huỷ")
+        alert.alertStyle = .warning
+        NSApp.activate(ignoringOtherApps: true)
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
         NextWordPredictor.shared.reset()
         debugLog("StatusMenu: NextWordPredictor reset")
     }
