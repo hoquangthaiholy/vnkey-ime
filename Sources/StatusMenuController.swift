@@ -146,10 +146,17 @@ class StatusMenuController: NSObject {
         let menu = NSMenu(title: "VnKey")
 
         // ── Language ──────────────────────────────────────────────────────
-        menu.addItem(makeItem(title: "Bật tiếng Việt",
-                              action: #selector(handleSetLanguage(_:)),
-                              tag: 501,
-                              isOn: Preferences.shared.isVietnameseMode))
+        let languageItem = makeItem(title: "Bật tiếng Việt",
+                                     action: #selector(handleSetLanguage(_:)),
+                                     tag: 501,
+                                     isOn: Preferences.shared.isVietnameseMode)
+        // Display-only: the actual toggle is a real system hotkey (Carbon
+        // RegisterEventHotKey in AppDelegate), not this menu item's own key
+        // equivalent — this just shows "⌘⇧Space" next to the item, same as
+        // "Thoát VnKey" shows "⌘Q".
+        languageItem.keyEquivalent = " "
+        languageItem.keyEquivalentModifierMask = [.command, .shift]
+        menu.addItem(languageItem)
         menu.addItem(.separator())
 
         // ── Input Method ──────────────────────────────────────────────────
@@ -232,11 +239,11 @@ class StatusMenuController: NSObject {
         menu.addItem(.separator())
 
         // ── About / Quit ──────────────────────────────────────────────────
-        let aboutItem = NSMenuItem(title: "Giới thiệu VnKey", action: #selector(handleShowAbout(_:)), keyEquivalent: "")
+        let aboutItem = NSMenuItem(title: "Giới thiệu", action: #selector(handleShowAbout(_:)), keyEquivalent: "")
         aboutItem.target = self
         menu.addItem(aboutItem)
 
-        let quitItem = NSMenuItem(title: "Thoát VnKey", action: #selector(handleQuit(_:)), keyEquivalent: "q")
+        let quitItem = NSMenuItem(title: "Thoát", action: #selector(handleQuit(_:)), keyEquivalent: "q")
         quitItem.target = self
         menu.addItem(quitItem)
 
