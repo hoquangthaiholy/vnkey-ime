@@ -15,14 +15,14 @@ TEST_BUILD_DIR = .build-tests
 
 all: $(BUNDLE)
 
-$(BUNDLE): $(SOURCES) Sources/Viet11K.txt Sources/Info.plist
+$(BUNDLE): $(SOURCES) Sources/wordlist.txt Sources/Info.plist
 	@echo "Compiling Swift files..."
 	@mkdir -p $(MACOS_DIR)
 	@mkdir -p $(RESOURCES_DIR)
 	swiftc -Osize -Xlinker -dead_strip $(SOURCES) -o $(MACOS_DIR)/$(APP_NAME)
 	@echo "Copying Info.plist and resources..."
 	@cp Sources/Info.plist $(BUNDLE)/Contents/Info.plist
-	@cp Sources/Viet11K.txt $(RESOURCES_DIR)/Viet11K.txt
+	@cp Sources/wordlist.txt $(RESOURCES_DIR)/wordlist.txt
 	@cp Sources/Assets/IMEMenuIcon.png $(RESOURCES_DIR)/IMEMenuIcon.png
 	@cp Sources/Assets/IMEMenuIcon@2x.png $(RESOURCES_DIR)/IMEMenuIcon@2x.png
 		@mkdir -p $(RESOURCES_DIR)/en.lproj

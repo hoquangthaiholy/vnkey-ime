@@ -16,18 +16,18 @@ public class Autocomplete {
     
     public init() {
         // Load from app bundle resources
-        if let path = Bundle.main.path(forResource: "Viet11K", ofType: "txt") {
+        if let path = Bundle.main.path(forResource: "wordlist", ofType: "txt") {
             loadWordlist(from: path)
         } else {
             // Check current directory or Sources/ as fallback (useful during local tests)
-            let localPath = "Viet11K.txt"
-            let sourcesPath = "Sources/Viet11K.txt"
+            let localPath = "wordlist.txt"
+            let sourcesPath = "Sources/wordlist.txt"
             if FileManager.default.fileExists(atPath: localPath) {
                 loadWordlist(from: localPath)
             } else if FileManager.default.fileExists(atPath: sourcesPath) {
                 loadWordlist(from: sourcesPath)
             } else {
-                NSLog("Viet11K.txt not found in bundle or local path.")
+                NSLog("wordlist.txt not found in bundle or local path.")
                 setFallbackWords()
             }
         }
@@ -118,7 +118,16 @@ public class Autocomplete {
         
         var matches: [String] = []
         var matchedSet = Set<String>()
-        
+
+        // If what's already been typed is itself a complete valid word (e.g. "ví"),
+        // surface it as the first suggestion too — confirming "this is already a
+        // word" — rather than only showing longer extensions like "vía".
+        if let exactWord = accentedPrefixMap[lowerPrefix]?.first(where: { $0.lowercased == lowerPrefix }) {
+            let suggestion = restoreCapitalization(source: exactWord.original, target: prefix)
+            matches.append(suggestion)
+            matchedSet.insert(suggestion)
+        }
+
         // Pass 1: Exact matches (including accents)
         if let candidates = accentedPrefixMap[lowerPrefix] {
             for word in candidates {

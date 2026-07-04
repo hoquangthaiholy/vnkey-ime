@@ -203,7 +203,7 @@ class StatusMenuController: NSObject {
                                   tag: 402,
                                   isOn: Preferences.shared.reduceUnderlineThickness))
         a11yMenu.addItem(.separator())
-        a11yMenu.addItem(makeItem(title: "Ghi nhớ ngôn ngữ theo từng ứng dụng",
+        a11yMenu.addItem(makeItem(title: "Ghi nhớ ngôn ngữ theo ứng dụng",
                                   action: #selector(handleTogglePerAppLanguageMemory(_:)),
                                   tag: 403,
                                   isOn: Preferences.shared.perAppLanguageMemory))
