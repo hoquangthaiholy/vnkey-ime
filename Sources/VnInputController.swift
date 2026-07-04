@@ -152,6 +152,18 @@ class VnInputController: IMKInputController {
                     return false
                 }
 
+                // A space must always end the word as typed and trigger next-word
+                // prediction — handled explicitly here (same as Tab/Enter above),
+                // ahead of the generic handleKeyboardEvent() call below, since that
+                // undocumented candidate-panel method may otherwise swallow the space
+                // itself (e.g. treating it as a confirm/selection key) and prevent
+                // our own space handling in the word-breaker section from ever running.
+                if char == " " {
+                    commitComposition(client)
+                    offerNextWordPredictions()
+                    return false
+                }
+
                 let candidatesObj = candidatesWindow as AnyObject
                 if candidatesObj.handleKeyboardEvent(event) == true {
                     return true
