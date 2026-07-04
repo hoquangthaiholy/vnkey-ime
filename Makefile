@@ -40,6 +40,12 @@ install: all
 	@mkdir -p $(INSTALL_DIR)
 	@rm -rf $(INSTALL_DIR)/$(APP_NAME).app
 	cp -R $(BUNDLE) $(INSTALL_DIR)/
+	@echo "Killing any already-running instance so the new binary is actually picked up..."
+	@# Just overwriting the .app bundle does NOT make a still-running instance
+	@# reload the new binary — it keeps running the old code in memory until
+	@# something kills it. TextInputMenuAgent/TextInputSwitcher don't reliably
+	@# do that themselves, so kill the process directly too.
+	-killall -9 $(APP_NAME) 2>/dev/null || true
 	@echo "Registering input source by launching the app..."
 	@# Launch the app once to trigger TISRegisterInputSource
 	@open $(INSTALL_DIR)/$(APP_NAME).app
