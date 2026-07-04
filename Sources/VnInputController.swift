@@ -15,6 +15,16 @@ class VnInputController: IMKInputController {
     /// its language-toggle menu item has no direct IMKTextInput client of its own.
     var lastClientBundleID: String?
 
+    /// The last word committed to the client, used as context for next-word
+    /// prediction (see NextWordPredictor). Lowercase, trimmed.
+    private var lastCommittedWord = ""
+
+    /// Predicted next words offered right after a word is committed, before
+    /// the user has typed anything for the next word yet. Cleared as soon as
+    /// typing starts so it doesn't linger and get confused with normal
+    /// prefix-completion suggestions.
+    private var pendingNextWordSuggestions: [String] = []
+
     var currentMethod: InputMethod {
         switch Preferences.shared.inputMethod {
         case .vni: return .vni
@@ -120,8 +130,7 @@ class VnInputController: IMKInputController {
                 // If Tab key is pressed, confirm the highlighted candidate
                 if keyCode == 48 || char == "\t" {
                     if Preferences.shared.showSuggestions {
-                        let processed = VnEngine.process(raw: rawBuffer, method: currentMethod, isNewToneStyle: Preferences.shared.isNewToneStyle)
-                        let suggestions = autocomplete.getSuggestions(prefix: processed)
+                        let suggestions = currentSuggestions()
                         if !suggestions.isEmpty {
                             var index = candidatesWindow.selectedCandidate()
                             if index < 0 || index >= suggestions.count {
@@ -129,6 +138,7 @@ class VnInputController: IMKInputController {
                             }
                             let selected = suggestions[index]
                             client.insertText(selected, replacementRange: NSMakeRange(NSNotFound, NSNotFound))
+                            recordCommittedWord(selected)
                             rawBuffer = ""
                             hideCandidates()
                             return true
@@ -160,6 +170,12 @@ class VnInputController: IMKInputController {
         if char.isWhitespace || char.isNewline || char == "\t" || isPunctuation(char) {
             if !rawBuffer.isEmpty {
                 commitComposition(client)
+                // Only offer a next-word prediction after a plain space — a word
+                // followed by punctuation (comma, period...) is usually a clause/
+                // sentence boundary, where the bigram context is much less reliable.
+                if char == " " {
+                    offerNextWordPredictions()
+                }
                 // Returning false lets the application receive and handle the space/punctuation natively
                 return false
             }
@@ -184,13 +200,53 @@ class VnInputController: IMKInputController {
         if !rawBuffer.isEmpty {
             let processed = VnEngine.process(raw: rawBuffer, method: currentMethod, isNewToneStyle: Preferences.shared.isNewToneStyle)
             client.insertText(processed, replacementRange: NSMakeRange(NSNotFound, NSNotFound))
+            recordCommittedWord(processed)
             rawBuffer = ""
             hideCandidates()
         }
     }
 
+    // MARK: - Next-word prediction
+
+    /// Learns the (previous word -> this word) transition and shifts the
+    /// "previous word" context forward. Called from every path that commits a
+    /// word to the client (typing + space/punctuation, Tab-confirm, candidate click).
+    private func recordCommittedWord(_ word: String) {
+        let trimmed = word.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        if !lastCommittedWord.isEmpty {
+            NextWordPredictor.shared.recordTransition(from: lastCommittedWord, to: trimmed)
+        }
+        lastCommittedWord = trimmed
+    }
+
+    /// Proactively surfaces predicted next words in the candidate window right
+    /// after a word is committed — before the user has typed anything yet.
+    private func offerNextWordPredictions() {
+        guard Preferences.shared.showSuggestions else { return }
+        let predicted = NextWordPredictor.shared.predictNextWords(after: lastCommittedWord)
+        guard !predicted.isEmpty else { return }
+        pendingNextWordSuggestions = predicted
+        showCandidates()
+    }
+
+    /// Single source of truth for "what should the candidate window show right
+    /// now": predicted next words while nothing has been typed yet for the
+    /// next word, or normal dictionary prefix-completion once typing starts.
+    private func currentSuggestions() -> [String] {
+        if rawBuffer.isEmpty {
+            return pendingNextWordSuggestions
+        }
+        let processed = VnEngine.process(raw: rawBuffer, method: currentMethod, isNewToneStyle: Preferences.shared.isNewToneStyle)
+        return autocomplete.getSuggestions(prefix: processed)
+    }
+
     // Updates the composition marking inline
     func updateComposition(_ client: IMKTextInput) {
+        // Typing has started on the next word — the proactive prediction no
+        // longer applies, fall back to completing what's actually being typed.
+        pendingNextWordSuggestions = []
+
         let processed = VnEngine.process(raw: rawBuffer, method: currentMethod, isNewToneStyle: Preferences.shared.isNewToneStyle)
 
         let markedString = NSAttributedString(string: processed, attributes: Self.underlineAttributes)
@@ -287,11 +343,15 @@ class VnInputController: IMKInputController {
         }
         rawBuffer = ""
         hideCandidates()
+        // Next-word context shouldn't leak across an app switch.
+        lastCommittedWord = ""
+        pendingNextWordSuggestions = []
         super.deactivateServer(sender)
     }
 
     override func cancelComposition() {
         rawBuffer = ""
+        pendingNextWordSuggestions = []
         hideCandidates()
         super.cancelComposition()
     }
@@ -329,8 +389,7 @@ class VnInputController: IMKInputController {
 
     override func candidates(_ sender: Any!) -> [Any]! {
         if !Preferences.shared.showSuggestions { return [] }
-        let processed = VnEngine.process(raw: rawBuffer, method: currentMethod, isNewToneStyle: Preferences.shared.isNewToneStyle)
-        return autocomplete.getSuggestions(prefix: processed)
+        return currentSuggestions()
     }
 
     func showCandidates() {
@@ -363,6 +422,7 @@ class VnInputController: IMKInputController {
     override func candidateSelected(_ candidateString: NSAttributedString!) {
         guard let client = client(), let selected = candidateString else { return }
         client.insertText(selected.string, replacementRange: NSMakeRange(NSNotFound, NSNotFound))
+        recordCommittedWord(selected.string)
         rawBuffer = ""
         hideCandidates()
     }
