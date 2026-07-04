@@ -160,7 +160,7 @@ class VnInputController: IMKInputController {
                 // our own space handling in the word-breaker section from ever running.
                 if char == " " {
                     commitComposition(client)
-                    offerNextWordPredictions()
+                    offerNextWordPredictions(client: client)
                     return false
                 }
 
@@ -186,7 +186,7 @@ class VnInputController: IMKInputController {
                 // followed by punctuation (comma, period...) is usually a clause/
                 // sentence boundary, where the bigram context is much less reliable.
                 if char == " " {
-                    offerNextWordPredictions()
+                    offerNextWordPredictions(client: client)
                 }
                 // Returning false lets the application receive and handle the space/punctuation natively
                 return false
@@ -234,11 +234,17 @@ class VnInputController: IMKInputController {
 
     /// Proactively surfaces predicted next words in the candidate window right
     /// after a word is committed — before the user has typed anything yet.
-    private func offerNextWordPredictions() {
+    private func offerNextWordPredictions(client: IMKTextInput) {
         guard Preferences.shared.showSuggestions else { return }
         let predicted = NextWordPredictor.shared.predictNextWords(after: lastCommittedWord)
         guard !predicted.isEmpty else { return }
         pendingNextWordSuggestions = predicted
+        // IMKCandidates anchors itself to the current marked-text range. Right
+        // after commitComposition (insertText, not setMarkedText), there is no
+        // marked range at all, so the panel has nothing to position itself
+        // against and can fail to appear. An empty marked text at the cursor
+        // gives it a valid (invisible) anchor without inserting anything.
+        client.setMarkedText("", selectionRange: NSMakeRange(0, 0), replacementRange: NSMakeRange(NSNotFound, NSNotFound))
         showCandidates()
     }
 
