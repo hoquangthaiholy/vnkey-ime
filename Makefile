@@ -25,7 +25,7 @@ $(BUNDLE): $(SOURCES) Sources/wordlist.txt Sources/Info.plist
 	@cp Sources/wordlist.txt $(RESOURCES_DIR)/wordlist.txt
 	@cp Sources/Assets/IMEMenuIcon.png $(RESOURCES_DIR)/IMEMenuIcon.png
 	@cp Sources/Assets/IMEMenuIcon@2x.png $(RESOURCES_DIR)/IMEMenuIcon@2x.png
-	@cp Sources/Assets/AppIcon.icns $(RESOURCES_DIR)/AppIcon.icns
+	@cp Sources/Assets/AppIcon.png $(RESOURCES_DIR)/AppIcon.png
 		@mkdir -p $(RESOURCES_DIR)/en.lproj
 	@mkdir -p $(RESOURCES_DIR)/vi.lproj
 	@cp Sources/en.lproj/InfoPlist.strings $(RESOURCES_DIR)/en.lproj/InfoPlist.strings

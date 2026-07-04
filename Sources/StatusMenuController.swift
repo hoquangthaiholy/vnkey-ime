@@ -17,12 +17,14 @@ class StatusMenuController: NSObject {
         super.init()
     }
 
-    /// The app's real icon (AppIcon.icns), used for the About panel and the
-    /// reset-confirmation alert. This is an LSUIElement agent, so NSApp
-    /// doesn't automatically surface CFBundleIconFile the way a normal app's
-    /// Dock icon would — load it directly from the bundle instead.
+    /// The app's real icon, used for the About panel and the reset-
+    /// confirmation alert. A single 512x512 PNG rather than a full multi-
+    /// resolution .icns — this only ever needs to render at dialog-icon size
+    /// (there's no Dock/Finder icon to serve, since VnKey is an LSUIElement
+    /// agent), and the .icns's other resolutions were ~7x the size of the
+    /// app's own binary for no practical benefit here.
     private static var appIcon: NSImage? {
-        guard let path = Bundle.main.path(forResource: "AppIcon", ofType: "icns") else { return nil }
+        guard let path = Bundle.main.path(forResource: "AppIcon", ofType: "png") else { return nil }
         return NSImage(contentsOfFile: path)
     }
 
