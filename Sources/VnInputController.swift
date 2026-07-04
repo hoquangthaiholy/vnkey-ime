@@ -4,6 +4,9 @@ import InputMethodKit
 @objc(VnInputController)
 class VnInputController: IMKInputController {
 
+    /// Virtual keycode for the Space bar — used by the ⌘⇧Space language-toggle shortcut.
+    private static let toggleLanguageKeyCode: UInt16 = 49
+
     var rawBuffer = ""
     var currentMethod: InputMethod {
         switch Preferences.shared.inputMethod {
@@ -41,6 +44,20 @@ class VnInputController: IMKInputController {
         // We only process Key Down events
         if event.type != .keyDown {
             return false
+        }
+
+        // Global shortcut (⌘⇧Space) toggles Vietnamese/English mode, regardless of
+        // which mode is currently active — checked before the passthrough below so
+        // it still works while in English mode.
+        if event.keyCode == Self.toggleLanguageKeyCode &&
+           event.modifierFlags.contains(.command) && event.modifierFlags.contains(.shift) {
+            commitComposition(client)
+            Preferences.shared.isVietnameseMode.toggle()
+            // IMKit always invokes handle(_:client:) on the main thread, so this is safe.
+            MainActor.assumeIsolated {
+                StatusMenuController.shared.refresh()
+            }
+            return true
         }
 
         // Language mode: in English mode, act as a pure passthrough — never buffer
@@ -198,15 +215,21 @@ class VnInputController: IMKInputController {
     // indicator — it cannot be suppressed. Explicitly requesting a thin, faint
     // underline instead of leaving it unset replaces that (heavier) default with
     // the least obtrusive style we can control. macOS gives IMEs no way to set an
-    // exact stroke width, so a dotted pattern is the lightest look available beyond that.
+    // exact stroke width, so fading the color further is the only way to make it
+    // read as lighter — a dotted pattern was tried but renders *more* prominent,
+    // not less, since each dot needs enough size/spacing to stay visible.
+    //
+    // NSColor.tertiaryLabelColor already has a fairly low built-in alpha
+    // (~0.38-0.4 on macOS). withAlphaComponent *replaces* that value rather than
+    // scaling it, so the "reduced" alpha must be picked well below tertiary's own
+    // baseline — otherwise the "reduced" state ends up more opaque, not less.
     private static var underlineAttributes: [NSAttributedString.Key: Any] {
-        var style: NSUnderlineStyle = .single
-        if Preferences.shared.reduceUnderlineThickness {
-            style.insert(.patternDot)
-        }
+        let color = Preferences.shared.reduceUnderlineThickness
+            ? NSColor.tertiaryLabelColor.withAlphaComponent(0.15)
+            : NSColor.tertiaryLabelColor
         return [
-            .underlineStyle: style.rawValue,
-            .underlineColor: NSColor.tertiaryLabelColor
+            .underlineStyle: NSUnderlineStyle.single.rawValue,
+            .underlineColor: color
         ]
     }
 

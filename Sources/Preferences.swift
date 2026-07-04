@@ -101,13 +101,13 @@ public struct Preferences {
         }
     }
 
-    /// When enabled, the underline shown under text being composed is drawn as a
-    /// dotted line instead of solid — macOS gives IMEs no way to set an exact
-    /// stroke width, so a dotted pattern is the lightest-looking style available.
+    /// When enabled, the underline shown under text being composed is drawn more
+    /// faded (lower opacity) — macOS gives IMEs no way to set an exact stroke
+    /// width, so a fainter color is the closest we can get to "thinner".
     public var reduceUnderlineThickness: Bool {
         get {
             if defaults.object(forKey: Keys.reduceUnderlineThickness) == nil {
-                return false // default to the normal solid underline
+                return false // default to the normal underline opacity
             }
             return defaults.bool(forKey: Keys.reduceUnderlineThickness)
         }

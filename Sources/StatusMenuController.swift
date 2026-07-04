@@ -66,13 +66,15 @@ class StatusMenuController: NSObject {
             .foregroundColor: color
         ]
 
-        // The "|" separator (e.g. "V | Telex") is drawn shorter and more faded
-        // than the surrounding text so it reads as a subtle divider, not a glyph.
+        // The "|" separator (e.g. "V | Telex") is drawn shorter, more faded, and
+        // with extra tracking than the surrounding text so it reads as a subtle
+        // divider, not a glyph.
         let separatorFont = NSFont.systemFont(ofSize: 10, weight: .regular)
         let separatorAttributes: [NSAttributedString.Key: Any] = [
             .font: separatorFont,
             .foregroundColor: color.withAlphaComponent(alpha * 0.4),
-            .baselineOffset: (font.pointSize - separatorFont.pointSize) / 2.0 + 1.0
+            .baselineOffset: (font.pointSize - separatorFont.pointSize) / 2.0 + 1.0,
+            .kern: 1.5
         ]
 
         let attributedText = NSMutableAttributedString(string: text, attributes: attributes)
@@ -203,6 +205,16 @@ class StatusMenuController: NSObject {
         let a11yHeader = NSMenuItem(title: "Trợ năng", action: nil, keyEquivalent: "")
         a11yHeader.submenu = a11yMenu
         menu.addItem(a11yHeader)
+        menu.addItem(.separator())
+
+        // ── About / Quit ──────────────────────────────────────────────────
+        let aboutItem = NSMenuItem(title: "Giới thiệu VnKey", action: #selector(handleShowAbout(_:)), keyEquivalent: "")
+        aboutItem.target = self
+        menu.addItem(aboutItem)
+
+        let quitItem = NSMenuItem(title: "Thoát VnKey", action: #selector(handleQuit(_:)), keyEquivalent: "q")
+        quitItem.target = self
+        menu.addItem(quitItem)
 
         return menu
     }
@@ -274,6 +286,22 @@ class StatusMenuController: NSObject {
         Preferences.shared.restoreMistypedVietnamese.toggle()
         debugLog("StatusMenu: restoreMistypedVietnamese → \(Preferences.shared.restoreMistypedVietnamese)")
         refresh()
+    }
+
+    @objc private func handleShowAbout(_ sender: NSMenuItem) {
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
+        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "?"
+        NSApp.activate(ignoringOtherApps: true)
+        NSApp.orderFrontStandardAboutPanel(options: [
+            .applicationName: "VnKey",
+            .applicationVersion: version,
+            .version: build,
+            .credits: NSAttributedString(string: "Bộ gõ tiếng Việt cho macOS.\nHỗ trợ Telex, VNI, gõ tắt và gợi ý từ.\n⌘⇧Space để bật/tắt tiếng Việt.")
+        ])
+    }
+
+    @objc private func handleQuit(_ sender: NSMenuItem) {
+        NSApplication.shared.terminate(nil)
     }
 
     // MARK: - Debug

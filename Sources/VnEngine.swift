@@ -275,13 +275,10 @@ public class VnEngine {
             } else {
                 // Consonant
                 if state.vowels.isEmpty {
-                    // Still in the onset
-                    if method == .telex && char == "d" && state.onset == "d" {
-                        state.onset = "đ"
-                        state.ddApplied = true
-                    } else {
-                        state.onset.append(char)
-                    }
+                    // Still in the onset. Note: a 'd' here that could toggle đ is
+                    // always intercepted earlier by the diacritic-key check above,
+                    // since isDiacriticKey('d') is unconditionally true for Telex.
+                    state.onset.append(char)
                 } else {
                     // In the coda
                     if !state.literalSuffix.isEmpty {
@@ -485,6 +482,10 @@ public class VnEngine {
                 if state.onset == "d" {
                     state.onset = "đ"
                     state.ddApplied = true
+                    // Đ is a deliberate, unambiguous Vietnamese-only action (English has
+                    // no "đ"). Trust it even if no vowel ever follows (e.g. abbreviations
+                    // like "ĐN"), instead of reverting the whole word to raw ASCII.
+                    state.hasExplicitCancel = true
                 } else if state.onset == "đ" && state.ddApplied {
                     state.onset = "d"
                     state.ddApplied = false
@@ -542,6 +543,9 @@ public class VnEngine {
                 if state.onset == "d" {
                     state.onset = "đ"
                     state.ddApplied = true
+                    // Đ is a deliberate, unambiguous Vietnamese-only action — trust it
+                    // even with no following vowel (e.g. abbreviations like "ĐN").
+                    state.hasExplicitCancel = true
                 } else if state.onset == "đ" && state.ddApplied {
                     state.onset = "d"
                     state.ddApplied = false

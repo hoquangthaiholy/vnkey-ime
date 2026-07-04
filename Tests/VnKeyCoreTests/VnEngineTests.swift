@@ -63,9 +63,18 @@ final class VnEngineTests: XCTestCase {
         XCTAssertEqual(telex("ddi"), "đi")
     }
 
+    func testDStrokeWithNoFollowingVowelIsStillTrusted() {
+        // "đ" has no English equivalent, so creating it is always deliberate —
+        // e.g. abbreviations like "ĐN" — and must not be discarded just because
+        // no vowel follows (regression: this used to fall back to raw "DDN").
+        XCTAssertEqual(telex("ddn"), "đn")
+        XCTAssertEqual(telex("DDN"), "ĐN")
+        XCTAssertEqual(vni("d9n"), "đn")
+    }
+
     func testDoubleDInCodaPositionIsInvalidRestoredAsRaw() {
-        // Once past the onset, "dd" is not a valid coda, so the whole word is
-        // restored unchanged rather than partially transformed.
+        // Once past the onset, "dd" is not a valid coda, and no đ was ever
+        // created, so the whole word is restored unchanged.
         XCTAssertEqual(telex("khoedd"), "khoedd")
     }
 
