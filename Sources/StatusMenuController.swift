@@ -202,6 +202,11 @@ class StatusMenuController: NSObject {
                                   action: #selector(handleToggleReduceUnderline(_:)),
                                   tag: 402,
                                   isOn: Preferences.shared.reduceUnderlineThickness))
+        a11yMenu.addItem(.separator())
+        a11yMenu.addItem(makeItem(title: "Ghi nhớ ngôn ngữ theo từng ứng dụng",
+                                  action: #selector(handleTogglePerAppLanguageMemory(_:)),
+                                  tag: 403,
+                                  isOn: Preferences.shared.perAppLanguageMemory))
         let a11yHeader = NSMenuItem(title: "Trợ năng", action: nil, keyEquivalent: "")
         a11yHeader.submenu = a11yMenu
         menu.addItem(a11yHeader)
@@ -234,8 +239,25 @@ class StatusMenuController: NSObject {
 
     @objc private func handleSetLanguage(_ sender: NSMenuItem) {
         Preferences.shared.isVietnameseMode.toggle()
+        rememberLanguageForCurrentApp()
         debugLog("StatusMenu: isVietnameseMode → \(Preferences.shared.isVietnameseMode)")
         refresh()
+    }
+
+    @objc private func handleTogglePerAppLanguageMemory(_ sender: NSMenuItem) {
+        Preferences.shared.perAppLanguageMemory.toggle()
+        debugLog("StatusMenu: perAppLanguageMemory → \(Preferences.shared.perAppLanguageMemory)")
+        refresh()
+    }
+
+    /// This menu has no IMKTextInput client of its own (it's a plain NSStatusItem
+    /// menu, not part of the IMK candidate/menu path), so it goes through the
+    /// active input controller's last-seen client bundle ID instead.
+    private func rememberLanguageForCurrentApp() {
+        guard Preferences.shared.perAppLanguageMemory,
+              let controller = (NSApplication.shared.delegate as? AppDelegate)?.currentController,
+              let bundleID = controller.lastClientBundleID else { return }
+        Preferences.shared.rememberLanguageMode(Preferences.shared.isVietnameseMode, forBundleID: bundleID)
     }
 
     @objc private func handleSetInputMethod(_ sender: NSMenuItem) {

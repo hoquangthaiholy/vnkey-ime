@@ -19,6 +19,8 @@ public struct Preferences {
         static let telexWAnywhere = "telexWAnywhere"
         static let telexBrackets = "telexBrackets"
         static let reduceUnderlineThickness = "reduceUnderlineThickness"
+        static let perAppLanguageMemory = "perAppLanguageMemory"
+        static let perAppLanguageMap = "perAppLanguageMap"
     }
 
     public var isVietnameseMode: Bool {
@@ -114,6 +116,37 @@ public struct Preferences {
         set {
             defaults.set(newValue, forKey: Keys.reduceUnderlineThickness)
         }
+    }
+
+    /// When enabled, VnKey remembers the last Vietnamese/English mode used in
+    /// each application (keyed by bundle identifier) and automatically restores
+    /// it when you switch back to that app — e.g. Xcode/Terminal stay in English
+    /// and Mail/Notes stay in Vietnamese without manually toggling each time.
+    public var perAppLanguageMemory: Bool {
+        get {
+            if defaults.object(forKey: Keys.perAppLanguageMemory) == nil {
+                return false // opt-in: off by default, since auto-switching is a behavior change
+            }
+            return defaults.bool(forKey: Keys.perAppLanguageMemory)
+        }
+        set {
+            defaults.set(newValue, forKey: Keys.perAppLanguageMemory)
+        }
+    }
+
+    /// The remembered Vietnamese/English mode for a given app, if one was ever recorded.
+    public func rememberedLanguageMode(forBundleID bundleID: String) -> Bool? {
+        guard let map = defaults.dictionary(forKey: Keys.perAppLanguageMap) as? [String: Bool] else {
+            return nil
+        }
+        return map[bundleID]
+    }
+
+    /// Records the current Vietnamese/English mode against a given app's bundle identifier.
+    public func rememberLanguageMode(_ isVietnamese: Bool, forBundleID bundleID: String) {
+        var map = (defaults.dictionary(forKey: Keys.perAppLanguageMap) as? [String: Bool]) ?? [:]
+        map[bundleID] = isVietnamese
+        defaults.set(map, forKey: Keys.perAppLanguageMap)
     }
 
     public var inputMethod: InputMethodType {

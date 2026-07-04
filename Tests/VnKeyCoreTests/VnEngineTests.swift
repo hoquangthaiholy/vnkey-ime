@@ -338,4 +338,26 @@ final class VnEngineTests: XCTestCase {
         XCTAssertEqual(telex("pass"), "pas") // expected "pass": loses one 's'
         XCTAssertEqual(telex("less"), "les") // expected "less": loses one 's'
     }
+
+    // MARK: - Per-app language memory
+
+    func testPerAppLanguageMemoryRoundTrip() {
+        let fakeBundleID = "com.vnkeytests.fake-app-\(UUID().uuidString)"
+        XCTAssertNil(Preferences.shared.rememberedLanguageMode(forBundleID: fakeBundleID))
+
+        Preferences.shared.rememberLanguageMode(false, forBundleID: fakeBundleID)
+        XCTAssertEqual(Preferences.shared.rememberedLanguageMode(forBundleID: fakeBundleID), false)
+
+        // Recording again for the same app overwrites, doesn't stack.
+        Preferences.shared.rememberLanguageMode(true, forBundleID: fakeBundleID)
+        XCTAssertEqual(Preferences.shared.rememberedLanguageMode(forBundleID: fakeBundleID), true)
+
+        // An app that was never recorded stays unknown (nil), not defaulted to false/true.
+        let otherBundleID = "com.vnkeytests.never-seen-\(UUID().uuidString)"
+        XCTAssertNil(Preferences.shared.rememberedLanguageMode(forBundleID: otherBundleID))
+    }
+
+    func testPerAppLanguageMemoryOffByDefault() {
+        XCTAssertFalse(Preferences.shared.perAppLanguageMemory)
+    }
 }

@@ -8,6 +8,13 @@ class VnInputController: IMKInputController {
     private static let toggleLanguageKeyCode: UInt16 = 49
 
     var rawBuffer = ""
+
+    /// Bundle identifier of the client app last seen in activateServer/handle —
+    /// used to look up/record its remembered language under perAppLanguageMemory.
+    /// StatusMenuController reads this (via AppDelegate.currentController) since
+    /// its language-toggle menu item has no direct IMKTextInput client of its own.
+    var lastClientBundleID: String?
+
     var currentMethod: InputMethod {
         switch Preferences.shared.inputMethod {
         case .vni: return .vni
@@ -53,6 +60,7 @@ class VnInputController: IMKInputController {
            event.modifierFlags.contains(.command) && event.modifierFlags.contains(.shift) {
             commitComposition(client)
             Preferences.shared.isVietnameseMode.toggle()
+            rememberCurrentLanguage(for: client)
             // IMKit always invokes handle(_:client:) on the main thread, so this is safe.
             MainActor.assumeIsolated {
                 StatusMenuController.shared.refresh()
@@ -238,8 +246,39 @@ class VnInputController: IMKInputController {
         if let appDelegate = NSApplication.shared.delegate as? AppDelegate {
             appDelegate.currentController = self
         }
+        if let client = sender as? IMKTextInput {
+            applyPerAppLanguageMemory(for: client)
+        }
         NSLog("VNKEY_MENU_DEBUG activateServer – registered controller in AppDelegate")
         super.activateServer(sender)
+    }
+
+    // MARK: - Per-app language memory
+
+    /// Called when a client app activates this input controller (i.e. the user
+    /// switched into that app). If perAppLanguageMemory is on and we've recorded
+    /// a mode for this app before, restore it — otherwise leave the current
+    /// mode alone (so a never-seen app just keeps whatever was already active).
+    private func applyPerAppLanguageMemory(for client: IMKTextInput) {
+        guard let bundleID = client.bundleIdentifier() else { return }
+        lastClientBundleID = bundleID
+
+        guard Preferences.shared.perAppLanguageMemory else { return }
+        if let remembered = Preferences.shared.rememberedLanguageMode(forBundleID: bundleID),
+           remembered != Preferences.shared.isVietnameseMode {
+            Preferences.shared.isVietnameseMode = remembered
+            MainActor.assumeIsolated {
+                StatusMenuController.shared.refresh()
+            }
+        }
+    }
+
+    /// Records whatever the language mode is right now against the given client's
+    /// app — call this immediately after every user-initiated language toggle.
+    private func rememberCurrentLanguage(for client: IMKTextInput) {
+        lastClientBundleID = client.bundleIdentifier()
+        guard Preferences.shared.perAppLanguageMemory, let bundleID = lastClientBundleID else { return }
+        Preferences.shared.rememberLanguageMode(Preferences.shared.isVietnameseMode, forBundleID: bundleID)
     }
 
     override func deactivateServer(_ sender: Any!) {
@@ -366,6 +405,8 @@ class VnInputController: IMKInputController {
             }
         case 402:
             Preferences.shared.reduceUnderlineThickness.toggle()
+        case 403:
+            Preferences.shared.perAppLanguageMemory.toggle()
         default:
             return false
         }
