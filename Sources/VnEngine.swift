@@ -314,6 +314,18 @@ public class VnEngine {
                 if !state.hasExplicitCancel {
                     return raw
                 }
+                // hasExplicitCancel only proves the *literalSuffix* portion is trustworthy —
+                // it says nothing about onset/vowels/coda assembled before the cancel. Re-check
+                // those alone (literalSuffix cleared): if they weren't valid Vietnamese either,
+                // the cancel just happened to occur mid-word by coincidence (e.g. English
+                // "class": 'a' triggers sắc on the 2nd 's', which cancels it, but onset "cl" was
+                // never valid Vietnamese) and the whole thing should still fall back to raw.
+                if !state.literalSuffix.isEmpty {
+                    let coreIsValid = isValidVietnameseSyllable(onset: state.onset, vowels: state.vowels, coda: state.coda, literalSuffix: "")
+                    if !coreIsValid {
+                        return raw
+                    }
+                }
             }
         }
         
@@ -514,10 +526,20 @@ public class VnEngine {
                 }
             case "7": // Whisker (o -> ơ, u -> ư)
                 if state.whiskerApplied {
-                    state.vowels = revertWhisker(state.vowels, onset: state.onset, coda: state.coda)
-                    state.whiskerApplied = false
-                    state.hasExplicitCancel = true
-                    state.literalSuffix.append("7")
+                    // A second "7" doesn't always mean "cancel" — e.g. VNI "tu7o7ng" for
+                    // "tương" types 7 once for each vowel (u->ư, then o->ơ, combining to
+                    // ươ). Try progressing further first (mirrors Telex's repeated "w"
+                    // handling for the same "ưo" -> "ươ" case); only treat it as a revert
+                    // if the vowel cluster genuinely has nowhere further to go.
+                    let modified = applyWhisker(state.vowels, onset: state.onset, coda: state.coda)
+                    if modified != state.vowels {
+                        state.vowels = modified
+                    } else {
+                        state.vowels = revertWhisker(state.vowels, onset: state.onset, coda: state.coda)
+                        state.whiskerApplied = false
+                        state.hasExplicitCancel = true
+                        state.literalSuffix.append("7")
+                    }
                 } else {
                     let modified = applyWhisker(state.vowels, onset: state.onset, coda: state.coda)
                     if modified != state.vowels {
