@@ -10,6 +10,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     /// on activateServer / deactivateServer so we always have the right instance.
     weak var currentController: VnInputController?
 
+    private var hotKeyRef: EventHotKeyRef?
+    private var hotKeyEventHandler: EventHandlerRef?
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Pre-warm Autocomplete dictionary on a background thread so it doesn't freeze the first keystroke
         DispatchQueue.global(qos: .utility).async {
@@ -51,7 +54,57 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // bypasses that entirely — all clicks are dispatched locally.
         StatusMenuController.shared.setup()
 
+        registerGlobalToggleHotKey()
+
         NSLog("VnKey Server started. Connection name: \(connectionName), Bundle ID: \(bundleID)")
+    }
+
+    // MARK: - Global ⌘⇧Space language toggle
+
+    /// Cmd-modified keystrokes are generally matched against the app's menu
+    /// bar / responder chain as a shortcut *before* ever being offered to an
+    /// input method — VnInputController.handle() simply never sees them in
+    /// many apps (Terminal included), which just beeps for the unclaimed
+    /// shortcut instead of toggling the language. Carbon's RegisterEventHotKey
+    /// is the standard, permission-free way to claim a key combination at the
+    /// system level so it's consumed before any app (or its beep) sees it —
+    /// this is how other input methods implement global toggle hotkeys too.
+    private func registerGlobalToggleHotKey() {
+        var eventType = EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed))
+        let selfPtr = Unmanaged.passUnretained(self).toOpaque()
+
+        InstallEventHandler(GetEventDispatcherTarget(), { _, eventRef, userData in
+            guard let userData = userData, let eventRef = eventRef else { return noErr }
+            var hotKeyID = EventHotKeyID()
+            GetEventParameter(eventRef, EventParamName(kEventParamDirectObject), EventParamType(typeEventHotKeyID),
+                               nil, MemoryLayout<EventHotKeyID>.size, nil, &hotKeyID)
+            guard hotKeyID.id == 1 else { return noErr }
+            let appDelegate = Unmanaged<AppDelegate>.fromOpaque(userData).takeUnretainedValue()
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    appDelegate.toggleVietnameseModeGlobally()
+                }
+            }
+            return noErr
+        }, 1, &eventType, selfPtr, &hotKeyEventHandler)
+
+        let hotKeyID = EventHotKeyID(signature: OSType(0x564E_4B59), id: 1) // 'VNKY'
+        let keyCodeSpace: UInt32 = 49
+        let status = RegisterEventHotKey(keyCodeSpace, UInt32(cmdKey | shiftKey), hotKeyID,
+                                          GetEventDispatcherTarget(), 0, &hotKeyRef)
+        if status != noErr {
+            NSLog("VnKey: failed to register global ⌘⇧Space hotkey, status=\(status)")
+        }
+    }
+
+    @MainActor
+    private func toggleVietnameseModeGlobally() {
+        if let controller = currentController {
+            controller.handleGlobalLanguageToggle()
+        } else {
+            Preferences.shared.isVietnameseMode.toggle()
+            StatusMenuController.shared.refresh()
+        }
     }
 
     private func registerSelf() {

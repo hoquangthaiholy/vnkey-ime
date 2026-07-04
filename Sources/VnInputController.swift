@@ -4,9 +4,6 @@ import InputMethodKit
 @objc(VnInputController)
 class VnInputController: IMKInputController {
 
-    /// Virtual keycode for the Space bar — used by the ⌘⇧Space language-toggle shortcut.
-    private static let toggleLanguageKeyCode: UInt16 = 49
-
     var rawBuffer = ""
 
     /// Bundle identifier of the client app last seen in activateServer/handle —
@@ -72,20 +69,13 @@ class VnInputController: IMKInputController {
             return false
         }
 
-        // Global shortcut (⌘⇧Space) toggles Vietnamese/English mode, regardless of
-        // which mode is currently active — checked before the passthrough below so
-        // it still works while in English mode.
-        if event.keyCode == Self.toggleLanguageKeyCode &&
-           event.modifierFlags.contains(.command) && event.modifierFlags.contains(.shift) {
-            commitComposition(client)
-            Preferences.shared.isVietnameseMode.toggle()
-            rememberCurrentLanguage(for: client)
-            // IMKit always invokes handle(_:client:) on the main thread, so this is safe.
-            MainActor.assumeIsolated {
-                StatusMenuController.shared.refresh()
-            }
-            return true
-        }
+        // The ⌘⇧Space language toggle is handled by a real global hotkey
+        // (AppDelegate.registerGlobalToggleHotKey, via Carbon's
+        // RegisterEventHotKey) instead of here: Cmd-modified keystrokes are
+        // generally matched against the app's menu/responder chain as a
+        // shortcut *before* ever reaching an input method, so this handler
+        // never actually saw the keystroke in most apps (Terminal included) —
+        // they just beeped for the unclaimed shortcut instead of toggling.
 
         // Language mode: in English mode, act as a pure passthrough — never buffer
         // or transform keystrokes, let the client application handle them natively.
@@ -402,6 +392,22 @@ class VnInputController: IMKInputController {
         lastClientBundleID = client.bundleIdentifier()
         guard Preferences.shared.perAppLanguageMemory, let bundleID = lastClientBundleID else { return }
         Preferences.shared.rememberLanguageMode(Preferences.shared.isVietnameseMode, forBundleID: bundleID)
+    }
+
+    /// Invoked by AppDelegate's global ⌘⇧Space hotkey (Carbon RegisterEventHotKey)
+    /// on whichever controller instance is currently active. Committing the
+    /// in-progress composition first means nothing typed is lost when the
+    /// language flips mid-word.
+    @MainActor
+    func handleGlobalLanguageToggle() {
+        if let client = client() {
+            commitComposition(client)
+            Preferences.shared.isVietnameseMode.toggle()
+            rememberCurrentLanguage(for: client)
+        } else {
+            Preferences.shared.isVietnameseMode.toggle()
+        }
+        StatusMenuController.shared.refresh()
     }
 
     override func deactivateServer(_ sender: Any!) {
