@@ -110,6 +110,13 @@ class VnInputController: IMKInputController {
                 updateComposition(client)
                 return true
             }
+            // rawBuffer is empty but a next-word preview may still be marked
+            // (see offerNextWordPredictions) — dismiss it instead of leaving a
+            // dangling marked-text session the client never gets to clear.
+            if !pendingNextWordSuggestions.isEmpty {
+                clearComposition(client)
+                return true
+            }
             return false
         }
 
@@ -191,6 +198,11 @@ class VnInputController: IMKInputController {
                 // Returning false lets the application receive and handle the space/punctuation natively
                 return false
             }
+            // rawBuffer is empty but a next-word preview may still be marked —
+            // dismiss it before letting the client handle this key natively.
+            if !pendingNextWordSuggestions.isEmpty {
+                clearComposition(client)
+            }
             return false
         }
 
@@ -239,13 +251,20 @@ class VnInputController: IMKInputController {
         let predicted = NextWordPredictor.shared.predictNextWords(after: lastCommittedWord)
         guard !predicted.isEmpty else { return }
         pendingNextWordSuggestions = predicted
-        // IMKCandidates anchors itself to the current marked-text range. Right
-        // after commitComposition (insertText, not setMarkedText), there is no
-        // marked range at all, so the panel has nothing to position itself
-        // against and can fail to appear. An empty marked text at the cursor
-        // gives it a valid (invisible) anchor without inserting anything.
-        client.setMarkedText("", selectionRange: NSMakeRange(0, 0), replacementRange: NSMakeRange(NSNotFound, NSNotFound))
-        showCandidates()
+        // Confirmed (via logging + direct visual testing) that neither an empty
+        // nor a real, visible marked-text preview renders here — candidates()/
+        // showCandidates() both fire correctly but nothing ever appears.
+        // Root cause: this call happens in the same synchronous pass as
+        // commitComposition's insertText just above it, and the client only
+        // applies one text-mutating UI update per keyDown-handling turn. Defer to
+        // the next run-loop iteration so it lands in its own turn instead.
+        let preview = predicted[0]
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self, self.pendingNextWordSuggestions == predicted else { return }
+            let markedString = NSAttributedString(string: preview, attributes: Self.underlineAttributes)
+            client.setMarkedText(markedString, selectionRange: NSMakeRange(preview.utf16.count, 0), replacementRange: NSMakeRange(NSNotFound, NSNotFound))
+            self.showCandidates()
+        }
     }
 
     /// Single source of truth for "what should the candidate window show right
@@ -382,6 +401,7 @@ class VnInputController: IMKInputController {
             replacementRange: NSMakeRange(NSNotFound, NSNotFound)
         )
         rawBuffer = ""
+        pendingNextWordSuggestions = []
         hideCandidates()
     }
 
