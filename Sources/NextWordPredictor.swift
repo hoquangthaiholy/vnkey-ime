@@ -68,6 +68,14 @@ public class NextWordPredictor {
         return nextWords.sorted { $0.value > $1.value }.prefix(limit).map { $0.key }
     }
 
+    /// Discards everything learned from the user's typing, falling back to
+    /// just the built-in seed pairs again. Useful when heavy testing/repeated
+    /// words have skewed the learned frequencies away from real usage.
+    public func reset() {
+        defaults.removeObject(forKey: Self.defaultsKey)
+        table = Self.seedBigrams
+    }
+
     // UserDefaults.dictionary(forKey:) round-trips as [String: Any] with the
     // inner dictionaries type-erased too, so a direct `as? [String: [String: Int]]`
     // cast doesn't always succeed — rebuild it by hand instead.

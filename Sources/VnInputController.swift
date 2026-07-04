@@ -25,6 +25,15 @@ class VnInputController: IMKInputController {
     /// prefix-completion suggestions.
     private var pendingNextWordSuggestions: [String] = []
 
+    /// UTF-16 length of whatever text is currently shown as marked/composing,
+    /// tracked ourselves rather than relying on the client. Some web-based
+    /// text fields (e.g. Facebook Messenger's chat box) don't reliably treat
+    /// NSNotFound / an empty setMarkedText call as "replace whatever is
+    /// currently marked" — the old marked text is left behind and the final
+    /// word gets duplicated. Knowing the exact length lets us pass an
+    /// explicit absolute range to insertText instead.
+    private var markedTextLength = 0
+
     var currentMethod: InputMethod {
         switch Preferences.shared.inputMethod {
         case .vni: return .vni
@@ -144,7 +153,7 @@ class VnInputController: IMKInputController {
                                 index = 0
                             }
                             let selected = suggestions[index]
-                            client.insertText(selected, replacementRange: NSMakeRange(NSNotFound, NSNotFound))
+                            insertFinalText(selected, client: client)
                             recordCommittedWord(selected)
                             rawBuffer = ""
                             hideCandidates()
@@ -223,11 +232,31 @@ class VnInputController: IMKInputController {
         guard let client = sender as? IMKTextInput else { return }
         if !rawBuffer.isEmpty {
             let processed = VnEngine.process(raw: rawBuffer, method: currentMethod, isNewToneStyle: Preferences.shared.isNewToneStyle)
-            client.insertText(processed, replacementRange: NSMakeRange(NSNotFound, NSNotFound))
+            insertFinalText(processed, client: client)
             recordCommittedWord(processed)
             rawBuffer = ""
             hideCandidates()
         }
+    }
+
+    /// Replaces whatever marked (composing/underlined) text is currently
+    /// showing with the final `text`, then inserts it. NSNotFound (and an
+    /// empty setMarkedText call, tried earlier) both rely on the client
+    /// correctly inferring "replace the marked range" — Facebook Messenger's
+    /// web chat box doesn't do that reliably, leaving the old marked text
+    /// behind and duplicating the word. Since we already know exactly how
+    /// long the current marked text is, compute the absolute range ourselves
+    /// from the client's reported cursor position instead of leaving it
+    /// ambiguous.
+    private func insertFinalText(_ text: String, client: IMKTextInput) {
+        if markedTextLength > 0 {
+            let selection = client.selectedRange()
+            let start = max(0, selection.location - markedTextLength)
+            client.insertText(text, replacementRange: NSMakeRange(start, markedTextLength))
+        } else {
+            client.insertText(text, replacementRange: NSMakeRange(NSNotFound, NSNotFound))
+        }
+        markedTextLength = 0
     }
 
     // MARK: - Next-word prediction
@@ -238,7 +267,7 @@ class VnInputController: IMKInputController {
     private func recordCommittedWord(_ word: String) {
         let trimmed = word.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        if !lastCommittedWord.isEmpty {
+        if !lastCommittedWord.isEmpty && Preferences.shared.nextWordPredictionEnabled {
             NextWordPredictor.shared.recordTransition(from: lastCommittedWord, to: trimmed)
         }
         lastCommittedWord = trimmed
@@ -247,7 +276,7 @@ class VnInputController: IMKInputController {
     /// Proactively surfaces predicted next words in the candidate window right
     /// after a word is committed — before the user has typed anything yet.
     private func offerNextWordPredictions(client: IMKTextInput) {
-        guard Preferences.shared.showSuggestions else { return }
+        guard Preferences.shared.showSuggestions, Preferences.shared.nextWordPredictionEnabled else { return }
         let predicted = NextWordPredictor.shared.predictNextWords(after: lastCommittedWord)
         guard !predicted.isEmpty else { return }
         pendingNextWordSuggestions = predicted
@@ -262,6 +291,7 @@ class VnInputController: IMKInputController {
         DispatchQueue.main.async { [weak self] in
             guard let self = self, self.pendingNextWordSuggestions == predicted else { return }
             client.setMarkedText("", selectionRange: NSMakeRange(0, 0), replacementRange: NSMakeRange(NSNotFound, NSNotFound))
+            self.markedTextLength = 0
             self.showCandidates()
         }
     }
@@ -292,6 +322,7 @@ class VnInputController: IMKInputController {
             selectionRange: NSMakeRange(processed.utf16.count, 0),
             replacementRange: NSMakeRange(NSNotFound, NSNotFound)
         )
+        markedTextLength = processed.utf16.count
 
         // Update candidates window with suggestions
         if Preferences.shared.showSuggestions {
@@ -401,6 +432,7 @@ class VnInputController: IMKInputController {
         )
         rawBuffer = ""
         pendingNextWordSuggestions = []
+        markedTextLength = 0
         hideCandidates()
     }
 
@@ -458,7 +490,7 @@ class VnInputController: IMKInputController {
 
     override func candidateSelected(_ candidateString: NSAttributedString!) {
         guard let client = client(), let selected = candidateString else { return }
-        client.insertText(selected.string, replacementRange: NSMakeRange(NSNotFound, NSNotFound))
+        insertFinalText(selected.string, client: client)
         recordCommittedWord(selected.string)
         rawBuffer = ""
         hideCandidates()
@@ -504,6 +536,10 @@ class VnInputController: IMKInputController {
             Preferences.shared.reduceUnderlineThickness.toggle()
         case 403:
             Preferences.shared.perAppLanguageMemory.toggle()
+        case 404:
+            Preferences.shared.nextWordPredictionEnabled.toggle()
+        case 405:
+            NextWordPredictor.shared.reset()
         default:
             return false
         }

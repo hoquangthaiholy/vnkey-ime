@@ -193,10 +193,18 @@ class StatusMenuController: NSObject {
 
         // ── Accessibility ─────────────────────────────────────────────────
         let a11yMenu = NSMenu(title: "Trợ năng")
-        a11yMenu.addItem(makeItem(title: "Hiện gợi ý từ",
+        a11yMenu.addItem(makeItem(title: "Hiện gợi ý từ khi gõ",
                                   action: #selector(handleToggleSuggestions(_:)),
                                   tag: 401,
                                   isOn: Preferences.shared.showSuggestions))
+        a11yMenu.addItem(.separator())
+        a11yMenu.addItem(makeItem(title: "Hiện gợi ý từ tiếp theo",
+                                  action: #selector(handleToggleNextWordPrediction(_:)),
+                                  tag: 404,
+                                  isOn: Preferences.shared.nextWordPredictionEnabled))
+        let resetItem = NSMenuItem(title: "Xoá dữ liệu học gợi ý", action: #selector(handleResetNextWordPrediction(_:)), keyEquivalent: "")
+        resetItem.target = self
+        a11yMenu.addItem(resetItem)
         a11yMenu.addItem(.separator())
         a11yMenu.addItem(makeItem(title: "Giảm độ đậm gạch chân",
                                   action: #selector(handleToggleReduceUnderline(_:)),
@@ -207,6 +215,8 @@ class StatusMenuController: NSObject {
                                   action: #selector(handleTogglePerAppLanguageMemory(_:)),
                                   tag: 403,
                                   isOn: Preferences.shared.perAppLanguageMemory))
+        a11yMenu.addItem(.separator())
+        
         let a11yHeader = NSMenuItem(title: "Trợ năng", action: nil, keyEquivalent: "")
         a11yHeader.submenu = a11yMenu
         menu.addItem(a11yHeader)
@@ -248,6 +258,17 @@ class StatusMenuController: NSObject {
         Preferences.shared.perAppLanguageMemory.toggle()
         debugLog("StatusMenu: perAppLanguageMemory → \(Preferences.shared.perAppLanguageMemory)")
         refresh()
+    }
+
+    @objc private func handleToggleNextWordPrediction(_ sender: NSMenuItem) {
+        Preferences.shared.nextWordPredictionEnabled.toggle()
+        debugLog("StatusMenu: nextWordPredictionEnabled → \(Preferences.shared.nextWordPredictionEnabled)")
+        refresh()
+    }
+
+    @objc private func handleResetNextWordPrediction(_ sender: NSMenuItem) {
+        NextWordPredictor.shared.reset()
+        debugLog("StatusMenu: NextWordPredictor reset")
     }
 
     /// This menu has no IMKTextInput client of its own (it's a plain NSStatusItem

@@ -21,6 +21,7 @@ public struct Preferences {
         static let reduceUnderlineThickness = "reduceUnderlineThickness"
         static let perAppLanguageMemory = "perAppLanguageMemory"
         static let perAppLanguageMap = "perAppLanguageMap"
+        static let nextWordPredictionEnabled = "nextWordPredictionEnabled"
     }
 
     public var isVietnameseMode: Bool {
@@ -147,6 +148,23 @@ public struct Preferences {
         var map = (defaults.dictionary(forKey: Keys.perAppLanguageMap) as? [String: Bool]) ?? [:]
         map[bundleID] = isVietnamese
         defaults.set(map, forKey: Keys.perAppLanguageMap)
+    }
+
+    /// When enabled (and showSuggestions is also on), a predicted next word is
+    /// offered right after committing the previous one. Separate from
+    /// showSuggestions so next-word prediction specifically can be turned off
+    /// (e.g. after the learned data gets skewed by heavy testing) without also
+    /// losing ordinary prefix-completion suggestions while typing.
+    public var nextWordPredictionEnabled: Bool {
+        get {
+            if defaults.object(forKey: Keys.nextWordPredictionEnabled) == nil {
+                return true // on by default, matching prior behavior under showSuggestions
+            }
+            return defaults.bool(forKey: Keys.nextWordPredictionEnabled)
+        }
+        set {
+            defaults.set(newValue, forKey: Keys.nextWordPredictionEnabled)
+        }
     }
 
     public var inputMethod: InputMethodType {
