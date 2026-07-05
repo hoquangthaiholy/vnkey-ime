@@ -49,7 +49,7 @@ install: all
 	-killall -9 $(APP_NAME) 2>/dev/null || true
 	@echo "Registering input source by launching the app..."
 	@# Launch the app once to trigger TISRegisterInputSource
-	@open $(INSTALL_DIR)/$(APP_NAME).app
+	-@open $(INSTALL_DIR)/$(APP_NAME).app
 	killall -9 TextInputMenuAgent
 	killall -9 TextInputSwitcher
 	@echo "Installation complete!"
@@ -59,7 +59,7 @@ install: all
 reload:
 	@echo "Reloading input source..."
 	-killall -9 $(APP_NAME) 2>/dev/null || true
-	@open $(INSTALL_DIR)/$(APP_NAME).app
+	-@open $(INSTALL_DIR)/$(APP_NAME).app
 	@echo "Input source reloaded!"
 
 uninstall:
