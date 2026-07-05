@@ -339,6 +339,41 @@ final class VnEngineTests: XCTestCase {
         XCTAssertEqual(telex("less"), "les") // expected "less": loses one 's'
     }
 
+    // MARK: - Whisker collapse when the modifier is typed before the 2nd vowel
+    // (regression: "thuwor" used to fall back to raw "thuwor" instead of "thuở")
+
+    // Both Telex's "w" and VNI's "7" convert a lone "u" to "ư" the moment they're
+    // pressed. If the rest of the uo-diphthong is then typed as plain letters —
+    // with no *second* modifier press — the buffer was left holding "ư"+"o..."
+    // (e.g. "ưo"), a shape that never appears in real Vietnamese: it only ever
+    // surfaces collapsed as "ươ"/"uơ". Nothing else re-ran the whisker-collapse
+    // logic in that case, so restoreMistypedVietnamese saw an invalid cluster
+    // and silently discarded the whole word back to raw. This affects common
+    // words whenever the modifier key is muscle-memoried right after the first
+    // vowel instead of after the full cluster.
+    func testWhiskerCollapsesWhenModifierPrecedesSecondVowelTelex() {
+        XCTAssertEqual(telex("thuwor"), "thuở") // vs. standard order "thuowr" -> "thuở"
+        XCTAssertEqual(telex("nuwocs"), "nước") // vs. standard order "nuowcs" -> "nước"
+        XCTAssertEqual(telex("tuwois"), "tưới") // vs. standard order "tuowis" -> "tưới"
+    }
+
+    func testWhiskerCollapsesWhenModifierPrecedesSecondVowelVNI() {
+        XCTAssertEqual(vni("tu7ong"), "tương") // vs. standard order "tuo7ng" -> "tương"
+        XCTAssertEqual(vni("nu7oc1"), "nước")  // vs. standard order "nuo7c1" -> "nước"
+    }
+
+    // The fix above must not break the pre-existing two-key-per-vowel idiom (one
+    // modifier press per vowel, each press converting its own vowel in turn) —
+    // the collapse only happens at final assembly, so a second explicit modifier
+    // press mid-word still sees the uncollapsed state and can correctly choose
+    // between progressing further (ưo -> ươ) and reverting (already covered by
+    // testVNIWhiskerProgressesLikeTelexRatherThanAlwaysReverting and
+    // testToneOrderIndependentBeforeOrAfterCoda above).
+    func testWhiskerCollapseDoesNotBreakTwoPressPerVowelIdiom() {
+        XCTAssertEqual(telex("tuwowngr"), "tưởng")
+        XCTAssertEqual(vni("tu7o7ng"), "tương")
+    }
+
     // MARK: - Per-app language memory
 
     func testPerAppLanguageMemoryRoundTrip() {

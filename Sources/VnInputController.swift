@@ -38,23 +38,6 @@ class VnInputController: IMKInputController {
         }
     }
 
-    private func debugMenu(_ message: String) {
-        #if DEBUG
-        let line = "\(Date()) \(message)\n"
-        let url = URL(fileURLWithPath: "/tmp/vnkey-menu-debug.log")
-        if let data = line.data(using: .utf8) {
-            if FileManager.default.fileExists(atPath: url.path),
-               let handle = try? FileHandle(forWritingTo: url) {
-                handle.seekToEndOfFile()
-                handle.write(data)
-                try? handle.close()
-            } else {
-                try? data.write(to: url)
-            }
-        }
-        #endif
-    }
-
     // Use shared Autocomplete helper to avoid duplicate memory and parsing overhead
     var autocomplete: Autocomplete { return Autocomplete.shared }
 
@@ -448,18 +431,6 @@ class VnInputController: IMKInputController {
         return char.unicodeScalars.allSatisfy { punctuationSet.contains($0) }
     }
 
-    // MARK: - Input Source Mode Switching
-
-    override func setValue(_ value: Any!, forTag tag: Int, client sender: Any!) {
-        NSLog("VNKEY_MENU_DEBUG setValue tag=\(tag), value=\(String(describing: value))")
-        debugMenu("setValue tag=\(tag), value=\(String(describing: value))")
-        if setInputMethod(forTag: tag) || setDiacriticOption(forTag: tag) || toggleAccessibilityOption(forTag: tag) {
-            return
-        }
-
-        super.setValue(value, forTag: tag, client: sender)
-    }
-
     // MARK: - Autocomplete Candidates Delegates
 
     override func candidates(_ sender: Any!) -> [Any]! {
@@ -506,53 +477,6 @@ class VnInputController: IMKInputController {
         return nil
     }
 
-    private func setInputMethod(forTag tag: Int) -> Bool {
-        switch tag {
-        case 101: Preferences.shared.inputMethod = .telex
-        case 104: Preferences.shared.inputMethod = .vni
-        default: return false
-        }
-        NSLog("VNKEY_MENU_DEBUG inputMethod now \(Preferences.shared.inputMethod.rawValue)")
-        debugMenu("inputMethod now \(Preferences.shared.inputMethod.rawValue)")
-        return true
-    }
-
-    private func setDiacriticOption(forTag tag: Int) -> Bool {
-        switch tag {
-        case 301: Preferences.shared.isNewToneStyle = true
-        case 302: Preferences.shared.isNewToneStyle = false
-        case 303: Preferences.shared.telexWAnywhere.toggle()
-        case 304: Preferences.shared.telexBrackets.toggle()
-        case 305: Preferences.shared.restoreMistypedVietnamese.toggle()
-        default: return false
-        }
-        NSLog("VNKEY_MENU_DEBUG diacritic option tag \(tag) handled")
-        debugMenu("diacritic option tag \(tag) handled")
-        return true
-    }
-
-    private func toggleAccessibilityOption(forTag tag: Int) -> Bool {
-        switch tag {
-        case 401:
-            Preferences.shared.showSuggestions.toggle()
-            if !Preferences.shared.showSuggestions {
-                hideCandidates()
-            }
-        case 402:
-            Preferences.shared.reduceUnderlineThickness.toggle()
-        case 403:
-            Preferences.shared.perAppLanguageMemory.toggle()
-        case 404:
-            Preferences.shared.nextWordPredictionEnabled.toggle()
-        case 405:
-            NextWordPredictor.shared.reset()
-        default:
-            return false
-        }
-        NSLog("VNKEY_MENU_DEBUG accessibility tag \(tag) handled")
-        debugMenu("accessibility tag \(tag) handled")
-        return true
-    }
 }
 
 // Protocol to expose the private/undocumented handleKeyboardEvent method on IMKCandidates to the Swift compiler

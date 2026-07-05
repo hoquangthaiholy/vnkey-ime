@@ -295,16 +295,36 @@ public class VnEngine {
         if !state.coda.isEmpty && finalVowels == "uơ" {
             finalVowels = "ươ"
         }
+        // A whisker modifier (Telex 'w' / VNI '7') pressed right after a lone "u"
+        // converts it to "ư" immediately; if the rest of the diphthong is then typed
+        // as plain letters (no second modifier press), the buffer is left holding
+        // "ư"+"o..." — a shape that never appears in real Vietnamese, since it only
+        // ever surfaces collapsed as "ươ"/"uơ". Nothing else would trigger that
+        // collapse in this case (no second modifier key ever arrives to run
+        // applyWhisker), so normalize it here at final assembly — after the full
+        // buffer is known, so it doesn't interfere with the existing two-key-per-vowel
+        // idiom (e.g. Telex "tuwowngr" / VNI "tu7o7ng"), where a second explicit
+        // modifier press must still see the uncollapsed "ưo" mid-loop to decide
+        // between progressing further and reverting.
+        if finalVowels == "ưo" {
+            finalVowels = (state.coda.isEmpty && (state.onset == "th" || state.onset == "h" || state.onset == "qu")) ? "uơ" : "ươ"
+        } else if finalVowels.contains("ưo") {
+            finalVowels = finalVowels.replacingOccurrences(of: "ưo", with: "ươ")
+        }
+        // Snapshot the collapsed-but-untoned vowels for the validity check below —
+        // validVowelClusters entries never carry tone marks, only the inherent
+        // circumflex/breve/horn diacritics already folded in above.
+        let preToneVowels = finalVowels
         if state.tone != .none && !finalVowels.isEmpty {
             finalVowels = applyTone(to: finalVowels, coda: state.coda, tone: state.tone, isNewToneStyle: isNewToneStyle)
         }
-        
+
         var result = state.onset + finalVowels + state.coda + state.literalSuffix
-        
+
         // Restore mistyped Vietnamese: if the syllable doesn't look like valid Vietnamese,
         // fall back to what was actually typed instead of a garbled transformation.
         if Preferences.shared.restoreMistypedVietnamese {
-            if !isValidVietnameseSyllable(onset: state.onset, vowels: state.vowels, coda: state.coda, literalSuffix: state.literalSuffix) {
+            if !isValidVietnameseSyllable(onset: state.onset, vowels: preToneVowels, coda: state.coda, literalSuffix: state.literalSuffix) {
                 // Only trust the already-assembled `result` when the syllable looks invalid
                 // *solely* because the user explicitly cancelled an active tone/diacritic key
                 // (e.g. typing "s" twice in Telex to escape it) — `result` correctly collapses
@@ -321,7 +341,7 @@ public class VnEngine {
                 // "class": 'a' triggers sắc on the 2nd 's', which cancels it, but onset "cl" was
                 // never valid Vietnamese) and the whole thing should still fall back to raw.
                 if !state.literalSuffix.isEmpty {
-                    let coreIsValid = isValidVietnameseSyllable(onset: state.onset, vowels: state.vowels, coda: state.coda, literalSuffix: "")
+                    let coreIsValid = isValidVietnameseSyllable(onset: state.onset, vowels: preToneVowels, coda: state.coda, literalSuffix: "")
                     if !coreIsValid {
                         return raw
                     }
@@ -477,14 +497,14 @@ public class VnEngine {
                     }
                 }
             } else if char == "[" {
-                let modified = applyO(state.vowels, onset: state.onset, coda: state.coda)
+                let modified = applyHorn(state.vowels)
                 if modified != state.vowels {
                     state.vowels = modified
                 } else {
                     state.literalSuffix.append("[")
                 }
             } else if char == "]" {
-                let modified = applyU(state.vowels, onset: state.onset, coda: state.coda)
+                let modified = applyHorn(state.vowels)
                 if modified != state.vowels {
                     state.vowels = modified
                 } else {
@@ -582,15 +602,13 @@ public class VnEngine {
         }
     }
     
-    private static func applyU(_ vowels: String, onset: String, coda: String) -> String {
+    // Telex's opt-in bracket shortcut: either '[' or ']' adds a horn to a bare
+    // "u"/"o" (the two keys sit next to each other on a US keyboard and aren't
+    // meant to distinguish which vowel gets the horn — the vowel already typed
+    // determines that).
+    private static func applyHorn(_ vowels: String) -> String {
         if vowels == "u" { return "ư" }
         if vowels == "o" { return "ơ" }
-        return vowels
-    }
-    
-    private static func applyO(_ vowels: String, onset: String, coda: String) -> String {
-        if vowels == "o" { return "ơ" }
-        if vowels == "u" { return "ư" }
         return vowels
     }
     

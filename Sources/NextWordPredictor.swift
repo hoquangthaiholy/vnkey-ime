@@ -58,7 +58,19 @@ public class NextWordPredictor {
         }
 
         table[key] = nextWords
-        defaults.set(table, forKey: Self.defaultsKey)
+
+        // recordTransition runs synchronously on the same (main) thread as key
+        // handling, once per committed word — the caller (VnInputController)
+        // is on the hot path for every keystroke. Measured at the table's own
+        // maxDistinctPreviousWords cap, serializing the whole dictionary back
+        // to UserDefaults here took ~4-5ms; on a background queue it can't add
+        // to per-keystroke latency. `table` is a value type, so the snapshot
+        // captured below is independent of whatever `self.table` becomes next.
+        let snapshot = table
+        let defaults = self.defaults
+        DispatchQueue.global(qos: .utility).async {
+            defaults.set(snapshot, forKey: Self.defaultsKey)
+        }
     }
 
     /// Returns up to `limit` next-word predictions for what typically follows
