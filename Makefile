@@ -7,7 +7,7 @@ MACOS_DIR = $(BUNDLE)/Contents/MacOS
 RESOURCES_DIR = $(BUNDLE)/Contents/Resources
 INSTALL_DIR = $(HOME)/Library/Input Methods
 
-SOURCES = Sources/Preferences.swift Sources/VnEngine.swift Sources/NextWordPredictor.swift Sources/Autocomplete.swift Sources/AppDelegate.swift Sources/StatusMenuController.swift Sources/VnInputController.swift Sources/main.swift
+SOURCES = Sources/Preferences.swift Sources/VnEngine.swift Sources/NextWordPredictor.swift Sources/VietnameseSpellChecker.swift Sources/Autocomplete.swift Sources/AppDelegate.swift Sources/StatusMenuController.swift Sources/VnInputController.swift Sources/main.swift
 
 TEST_BUILD_DIR = .build-tests
 

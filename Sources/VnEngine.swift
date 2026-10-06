@@ -88,6 +88,141 @@ public class VnEngine {
         return vowelSet.contains(char)
     }
     
+    public static let charToToneInfo: [Character: (base: Character, tone: Tone)] = {
+        var map: [Character: (base: Character, tone: Tone)] = [:]
+        for (base, forms) in toneMap {
+            for (index, formChar) in forms.enumerated() {
+                if let tone = Tone(rawValue: index) {
+                    map[formChar] = (base: base, tone: tone)
+                    map[Character(String(formChar).uppercased())] = (base: Character(String(base).uppercased()), tone: tone)
+                }
+            }
+        }
+        return map
+    }()
+    
+    public static func isVowelChar(_ char: Character) -> Bool {
+        return charToToneInfo[char] != nil || vowelSet.contains(char)
+    }
+
+    /// Determines whether the given string forms a grammatically and phonotactically valid Vietnamese syllable or compound word.
+    public static func isValidVietnameseWord(_ word: String) -> Bool {
+        let trimmed = word.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty { return false }
+        
+        let subwords = trimmed.components(separatedBy: .whitespaces).filter { !$0.isEmpty }
+        if subwords.count > 1 {
+            return subwords.allSatisfy { isValidVietnameseWord($0) }
+        }
+        
+        let lower = trimmed.lowercased()
+        if !lower.allSatisfy({ $0.isLetter }) {
+            return false
+        }
+        
+        let multiOnsets = ["ngh", "ng", "nh", "ch", "gh", "gi", "kh", "ph", "qu", "th", "tr"]
+        var onset = ""
+        var remaining = lower
+        
+        if remaining.hasPrefix("qu") {
+            onset = "qu"
+            remaining = String(remaining.dropFirst(2))
+        } else if remaining.hasPrefix("gi") {
+            let rest = remaining.dropFirst(2)
+            let hasFollowingVowel = rest.contains(where: { isVowelChar($0) })
+            if hasFollowingVowel {
+                onset = "gi"
+                remaining = String(rest)
+            } else {
+                onset = "g"
+                remaining = String(remaining.dropFirst(1))
+            }
+        } else {
+            var matchedMulti = false
+            for mo in multiOnsets {
+                if remaining.hasPrefix(mo) {
+                    onset = mo
+                    remaining = String(remaining.dropFirst(mo.count))
+                    matchedMulti = true
+                    break
+                }
+            }
+            if !matchedMulti {
+                if let first = remaining.first, !isVowelChar(first) {
+                    let singleOnset = String(first)
+                    if validOnsets.contains(singleOnset) {
+                        onset = singleOnset
+                        remaining = String(remaining.dropFirst(1))
+                    } else {
+                        return false
+                    }
+                }
+            }
+        }
+        
+        if remaining.isEmpty {
+            return onset == "đ"
+        }
+        
+        var vowelChars: [Character] = []
+        var tonesFound: [Tone] = []
+        var coda = ""
+        var inVowels = true
+        
+        for char in remaining {
+            if inVowels {
+                if isVowelChar(char) {
+                    if let info = charToToneInfo[char] {
+                        vowelChars.append(info.base)
+                        if info.tone != .none {
+                            tonesFound.append(info.tone)
+                        }
+                    } else {
+                        vowelChars.append(char)
+                    }
+                } else {
+                    inVowels = false
+                    coda.append(char)
+                }
+            } else {
+                coda.append(char)
+            }
+        }
+        
+        let nonNeutralTones = tonesFound.filter { $0 != .none }
+        if nonNeutralTones.count > 1 {
+            return false
+        }
+        
+        let baseVowels = String(vowelChars)
+        if baseVowels.isEmpty {
+            return false
+        }
+        
+        if !validVowelClusters.contains(baseVowels) {
+            return false
+        }
+        if !validCodas.contains(coda) {
+            return false
+        }
+        if !validOnsets.contains(onset) {
+            return false
+        }
+        
+        if (onset == "k" || onset == "gh" || onset == "ngh") {
+            if let firstVowel = baseVowels.first, !["i", "e", "ê", "y"].contains(firstVowel) {
+                return false
+            }
+        }
+        if (onset == "c" || onset == "g" || onset == "ng") {
+            if let firstVowel = baseVowels.first, ["i", "e", "ê", "y"].contains(firstVowel) {
+                return false
+            }
+        }
+        
+        return true
+    }
+    
     // Processes a raw string typed so far and returns the translated Vietnamese word
     public static func process(raw: String, method: InputMethod, isNewToneStyle: Bool = true) -> String {
         if raw.isEmpty { return "" }

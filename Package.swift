@@ -13,7 +13,7 @@ let package = Package(
         .target(
             name: "VnKeyCore",
             path: "Sources",
-            sources: ["VnEngine.swift", "Preferences.swift", "NextWordPredictor.swift"]
+            sources: ["VnEngine.swift", "Preferences.swift", "NextWordPredictor.swift", "VietnameseSpellChecker.swift"]
         ),
         .testTarget(
             name: "VnKeyCoreTests",

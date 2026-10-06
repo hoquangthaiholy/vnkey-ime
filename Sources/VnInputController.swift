@@ -85,11 +85,10 @@ class VnInputController: IMKInputController {
                 return true
             }
             // rawBuffer is empty but a next-word preview may still be marked
-            // (see offerNextWordPredictions) — dismiss it instead of leaving a
-            // dangling marked-text session the client never gets to clear.
+            // (see offerNextWordPredictions) — dismiss it and allow client to delete the space
             if !pendingNextWordSuggestions.isEmpty {
                 clearComposition(client)
-                return true
+                return false
             }
             return false
         }
@@ -177,6 +176,13 @@ class VnInputController: IMKInputController {
             if !pendingNextWordSuggestions.isEmpty {
                 clearComposition(client)
             }
+            if char == " " {
+                // User pressed Space while rawBuffer is empty (e.g. after Backspace, or after an existing word)
+                if let precedingWord = extractPrecedingWord(client: client) {
+                    lastCommittedWord = precedingWord
+                    offerNextWordPredictions(client: client)
+                }
+            }
             return false
         }
 
@@ -204,7 +210,7 @@ class VnInputController: IMKInputController {
         }
     }
 
-    /// Replaces whatever marked (composing/underlined) text is currently
+    /// Replaces whatever marked (composing) text is currently
     /// showing with the final `text`, then inserts it. NSNotFound (and an
     /// empty setMarkedText call, tried earlier) both rely on the client
     /// correctly inferring "replace the marked range" — Facebook Messenger's
@@ -233,9 +239,36 @@ class VnInputController: IMKInputController {
         let trimmed = word.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         if !lastCommittedWord.isEmpty && Preferences.shared.nextWordPredictionEnabled {
-            NextWordPredictor.shared.recordTransition(from: lastCommittedWord, to: trimmed)
+            // Anti-pollution: Only learn transitions if both words are structurally valid Vietnamese words
+            if VnEngine.isValidVietnameseWord(trimmed) && VnEngine.isValidVietnameseWord(lastCommittedWord) {
+                NextWordPredictor.shared.recordTransition(from: lastCommittedWord, to: trimmed)
+            }
         }
         lastCommittedWord = trimmed
+    }
+
+    /// Reads text right before the cursor in the client application to extract the preceding word.
+    private func extractPrecedingWord(client: IMKTextInput) -> String? {
+        let selection = client.selectedRange()
+        guard selection.location != NSNotFound && selection.location > 0 else {
+            return !lastCommittedWord.isEmpty ? lastCommittedWord : nil
+        }
+        let checkLength = min(50, selection.location)
+        let lookbackRange = NSMakeRange(selection.location - checkLength, checkLength)
+        guard let attrStr = client.attributedSubstring(from: lookbackRange),
+              !attrStr.string.isEmpty else {
+            return !lastCommittedWord.isEmpty ? lastCommittedWord : nil
+        }
+        let text = attrStr.string
+        // Only trigger if character immediately before cursor is non-whitespace (i.e. at the end of a word)
+        guard let lastChar = text.last, !lastChar.isWhitespace && !lastChar.isNewline else {
+            return nil
+        }
+        let tokens = text.components(separatedBy: CharacterSet.whitespacesAndNewlines.union(.punctuationCharacters)).filter { !$0.isEmpty }
+        if let last = tokens.last {
+            return last
+        }
+        return !lastCommittedWord.isEmpty ? lastCommittedWord : nil
     }
 
     /// Proactively surfaces predicted next words in the candidate window right
@@ -280,7 +313,7 @@ class VnInputController: IMKInputController {
 
         let processed = VnEngine.process(raw: rawBuffer, method: currentMethod, isNewToneStyle: Preferences.shared.isNewToneStyle)
 
-        let markedString = NSAttributedString(string: processed, attributes: Self.underlineAttributes)
+        let markedString = NSAttributedString(string: processed)
 
         client.setMarkedText(
             markedString,
@@ -300,17 +333,6 @@ class VnInputController: IMKInputController {
         } else {
             hideCandidates()
         }
-    }
-
-    override func mark(forStyle style: Int, at range: NSRange) -> [AnyHashable : Any]! {
-        return Self.underlineAttributes
-    }
-
-    private static var underlineAttributes: [NSAttributedString.Key: Any] {
-        return [
-            .underlineStyle: NSUnderlineStyle.single.rawValue,
-            .underlineColor: NSColor.tertiaryLabelColor
-        ]
     }
 
     override func activateServer(_ sender: Any!) {
@@ -381,6 +403,7 @@ class VnInputController: IMKInputController {
     }
 
     override func deactivateServer(_ sender: Any!) {
+        NextWordPredictor.shared.flush()
         if let client = client() {
             commitComposition(client)
         }

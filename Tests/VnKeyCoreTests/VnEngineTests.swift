@@ -395,4 +395,32 @@ final class VnEngineTests: XCTestCase {
     func testPerAppLanguageMemoryOffByDefault() {
         XCTAssertFalse(Preferences.shared.perAppLanguageMemory)
     }
+
+    // MARK: - Vietnamese Syllable/Word Validity (Anti-pollution)
+
+    func testIsValidVietnameseWord() {
+        // Valid Vietnamese words
+        XCTAssertTrue(VnEngine.isValidVietnameseWord("cảm"))
+        XCTAssertTrue(VnEngine.isValidVietnameseWord("ơn"))
+        XCTAssertTrue(VnEngine.isValidVietnameseWord("người"))
+        XCTAssertTrue(VnEngine.isValidVietnameseWord("học"))
+        XCTAssertTrue(VnEngine.isValidVietnameseWord("chào"))
+        XCTAssertTrue(VnEngine.isValidVietnameseWord("đi"))
+        XCTAssertTrue(VnEngine.isValidVietnameseWord("Hà Nội"))
+        XCTAssertTrue(VnEngine.isValidVietnameseWord("nghiêng"))
+        XCTAssertTrue(VnEngine.isValidVietnameseWord("quá"))
+        XCTAssertTrue(VnEngine.isValidVietnameseWord("giúp"))
+        XCTAssertTrue(VnEngine.isValidVietnameseWord("giếng"))
+        XCTAssertTrue(VnEngine.isValidVietnameseWord("thuở"))
+
+        // Invalid Vietnamese words (typos, English, gibberish)
+        XCTAssertFalse(VnEngine.isValidVietnameseWord("cmar"))
+        XCTAssertFalse(VnEngine.isValidVietnameseWord("tooi"))
+        XCTAssertFalse(VnEngine.isValidVietnameseWord("ddanwg"))
+        XCTAssertFalse(VnEngine.isValidVietnameseWord("chungs"))
+        XCTAssertFalse(VnEngine.isValidVietnameseWord("asdf"))
+        XCTAssertFalse(VnEngine.isValidVietnameseWord("test"))
+        XCTAssertFalse(VnEngine.isValidVietnameseWord("123"))
+        XCTAssertFalse(VnEngine.isValidVietnameseWord(""))
+    }
 }

@@ -19,6 +19,10 @@ public class NextWordPredictor {
     private var baselineBigrams: [String: [String: Int]] = [:]
     private var userLearnedTable: [String: [String: Int]] = [:]
 
+    private var hasUnsavedChanges = false
+    private var saveWorkItem: DispatchWorkItem?
+    private let saveQueue = DispatchQueue(label: "com.theodore.vnkey.nextword.save", qos: .utility)
+
     private static let defaultSeedBigrams: [String: [String: Int]] = [
         "cảm": ["ơn": 100, "thấy": 80, "giác": 70, "nhận": 60],
         "xin": ["chào": 100, "lỗi": 90, "phép": 80, "hỏi": 70],
@@ -41,6 +45,10 @@ public class NextWordPredictor {
     public init() {
         loadBaselineBigrams()
         userLearnedTable = Self.decodeTable(defaults.dictionary(forKey: Self.defaultsKey)) ?? [:]
+    }
+
+    deinit {
+        flush()
     }
 
     private func loadBaselineBigrams() {
@@ -102,12 +110,25 @@ public class NextWordPredictor {
         }
 
         userLearnedTable[key] = nextWords
+        hasUnsavedChanges = true
+        scheduleSave()
+    }
 
-        let snapshot = userLearnedTable
-        let defaults = self.defaults
-        DispatchQueue.global(qos: .utility).async {
-            defaults.set(snapshot, forKey: Self.defaultsKey)
+    private func scheduleSave() {
+        saveWorkItem?.cancel()
+        let workItem = DispatchWorkItem { [weak self] in
+            self?.flush()
         }
+        saveWorkItem = workItem
+        saveQueue.asyncAfter(deadline: .now() + 5.0, execute: workItem)
+    }
+
+    /// Flushes any pending learned transitions to UserDefaults immediately.
+    public func flush() {
+        guard hasUnsavedChanges else { return }
+        hasUnsavedChanges = false
+        let snapshot = userLearnedTable
+        defaults.set(snapshot, forKey: Self.defaultsKey)
     }
 
     /// Returns up to `limit` next-word predictions for what typically follows `previous`.
@@ -156,6 +177,8 @@ public class NextWordPredictor {
     /// Discards everything learned from the user's typing, falling back to
     /// just the baseline bigram dictionary.
     public func reset() {
+        saveWorkItem?.cancel()
+        hasUnsavedChanges = false
         defaults.removeObject(forKey: Self.defaultsKey)
         userLearnedTable.removeAll()
     }
