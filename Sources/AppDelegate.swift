@@ -19,7 +19,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             _ = Autocomplete.shared
         }
         
-        let bundleID = Bundle.main.bundleIdentifier ?? "com.ahtstudio.inputmethod.VnKey"
+        let bundleID = Bundle.main.bundleIdentifier ?? "com.theodore.inputmethod.VnKey"
         let connectionName = bundleID + "_Connection"
 
         // Initialize the IMKServer
@@ -59,16 +59,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         NSLog("VnKey Server started. Connection name: \(connectionName), Bundle ID: \(bundleID)")
     }
 
-    // MARK: - Global ⌘⇧Space language toggle
+    // MARK: - Global ⌃⇧Space language toggle
 
-    /// Cmd-modified keystrokes are generally matched against the app's menu
-    /// bar / responder chain as a shortcut *before* ever being offered to an
-    /// input method — VnInputController.handle() simply never sees them in
-    /// many apps (Terminal included), which just beeps for the unclaimed
-    /// shortcut instead of toggling the language. Carbon's RegisterEventHotKey
-    /// is the standard, permission-free way to claim a key combination at the
-    /// system level so it's consumed before any app (or its beep) sees it —
-    /// this is how other input methods implement global toggle hotkeys too.
     private func registerGlobalToggleHotKey() {
         var eventType = EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed))
         let selfPtr = Unmanaged.passUnretained(self).toOpaque()
@@ -90,10 +82,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         let hotKeyID = EventHotKeyID(signature: OSType(0x564E_4B59), id: 1) // 'VNKY'
         let keyCodeSpace: UInt32 = 49
-        let status = RegisterEventHotKey(keyCodeSpace, UInt32(cmdKey | shiftKey), hotKeyID,
+        let status = RegisterEventHotKey(keyCodeSpace, UInt32(controlKey | shiftKey), hotKeyID,
                                           GetEventDispatcherTarget(), 0, &hotKeyRef)
         if status != noErr {
-            NSLog("VnKey: failed to register global ⌘⇧Space hotkey, status=\(status)")
+            NSLog("VnKey: failed to register global ⌃⇧Space hotkey, status=\(status)")
         }
     }
 
@@ -103,6 +95,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             controller.handleGlobalLanguageToggle()
         } else {
             Preferences.shared.isVietnameseMode.toggle()
+            if Preferences.shared.perAppLanguageMemory {
+                if let frontmost = NSWorkspace.shared.frontmostApplication?.bundleIdentifier {
+                    let myBundleID = Bundle.main.bundleIdentifier ?? "com.theodore.inputmethod.VnKey"
+                    if frontmost != myBundleID && frontmost != "\(myBundleID).mac" {
+                        Preferences.shared.rememberLanguageMode(Preferences.shared.isVietnameseMode, forBundleID: frontmost)
+                    }
+                }
+            }
             StatusMenuController.shared.refresh()
         }
     }

@@ -43,7 +43,31 @@ class StatusMenuController: NSObject {
             object: nil
         )
         
+        NSWorkspace.shared.notificationCenter.addObserver(
+            self,
+            selector: #selector(applicationActivated(_:)),
+            name: NSWorkspace.didActivateApplicationNotification,
+            object: nil
+        )
+        
         updateButton()
+    }
+
+    @objc private func applicationActivated(_ notification: Notification) {
+        guard Preferences.shared.perAppLanguageMemory else { return }
+        guard let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
+              let bundleID = app.bundleIdentifier else {
+            return
+        }
+        let myBundleID = Bundle.main.bundleIdentifier ?? "com.theodore.inputmethod.VnKey"
+        if bundleID == myBundleID || bundleID == "\(myBundleID).mac" {
+            return
+        }
+        if let remembered = Preferences.shared.rememberedLanguageMode(forBundleID: bundleID),
+           remembered != Preferences.shared.isVietnameseMode {
+            Preferences.shared.isVietnameseMode = remembered
+            refresh()
+        }
     }
 
     /// Rebuild the menu so check-marks reflect current Preferences.
@@ -61,7 +85,7 @@ class StatusMenuController: NSObject {
         let currentSource = TISCopyCurrentKeyboardInputSource().takeRetainedValue()
         if let idPtr = TISGetInputSourceProperty(currentSource, kTISPropertyInputSourceID) {
             let id = Unmanaged<CFString>.fromOpaque(idPtr).takeUnretainedValue() as String
-            let myBundleID = Bundle.main.bundleIdentifier ?? "com.ahtstudio.inputmethod.VnKey"
+            let myBundleID = Bundle.main.bundleIdentifier ?? "com.theodore.inputmethod.VnKey"
             // The actual input source ID defined in Info.plist has a ".mac" suffix
             return id == myBundleID || id == "\(myBundleID).mac"
         }
@@ -152,12 +176,8 @@ class StatusMenuController: NSObject {
                                      action: #selector(handleSetLanguage(_:)),
                                      tag: 501,
                                      isOn: Preferences.shared.isVietnameseMode)
-        // Display-only: the actual toggle is a real system hotkey (Carbon
-        // RegisterEventHotKey in AppDelegate), not this menu item's own key
-        // equivalent — this just shows "⌘⇧Space" next to the item, same as
-        // "Thoát VnKey" shows "⌘Q".
         languageItem.keyEquivalent = " "
-        languageItem.keyEquivalentModifierMask = [.command, .shift]
+        languageItem.keyEquivalentModifierMask = [.control, .shift]
         menu.addItem(languageItem)
         menu.addItem(.separator())
 
@@ -224,11 +244,6 @@ class StatusMenuController: NSObject {
         resetItem.target = self
         a11yMenu.addItem(resetItem)
         a11yMenu.addItem(.separator())
-        a11yMenu.addItem(makeItem(title: "Giảm độ đậm gạch chân",
-                                  action: #selector(handleToggleReduceUnderline(_:)),
-                                  tag: 402,
-                                  isOn: Preferences.shared.reduceUnderlineThickness))
-        a11yMenu.addItem(.separator())
         a11yMenu.addItem(makeItem(title: "Ghi nhớ ngôn ngữ theo ứng dụng",
                                   action: #selector(handleTogglePerAppLanguageMemory(_:)),
                                   tag: 403,
@@ -278,6 +293,16 @@ class StatusMenuController: NSObject {
         refresh()
     }
 
+    private func rememberLanguageForCurrentApp() {
+        guard Preferences.shared.perAppLanguageMemory else { return }
+        let controller = (NSApplication.shared.delegate as? AppDelegate)?.currentController
+        let myBundleID = Bundle.main.bundleIdentifier ?? "com.theodore.inputmethod.VnKey"
+        let frontmostID = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+        let bundleID: String? = (frontmostID != nil && frontmostID != myBundleID) ? frontmostID : controller?.lastClientBundleID
+        guard let targetBundleID = bundleID else { return }
+        Preferences.shared.rememberLanguageMode(Preferences.shared.isVietnameseMode, forBundleID: targetBundleID)
+    }
+
     @objc private func handleToggleNextWordPrediction(_ sender: NSMenuItem) {
         Preferences.shared.nextWordPredictionEnabled.toggle()
         debugLog("StatusMenu: nextWordPredictionEnabled → \(Preferences.shared.nextWordPredictionEnabled)")
@@ -298,16 +323,6 @@ class StatusMenuController: NSObject {
         guard alert.runModal() == .alertFirstButtonReturn else { return }
         NextWordPredictor.shared.reset()
         debugLog("StatusMenu: NextWordPredictor reset")
-    }
-
-    /// This menu has no IMKTextInput client of its own (it's a plain NSStatusItem
-    /// menu, not part of the IMK candidate/menu path), so it goes through the
-    /// active input controller's last-seen client bundle ID instead.
-    private func rememberLanguageForCurrentApp() {
-        guard Preferences.shared.perAppLanguageMemory,
-              let controller = (NSApplication.shared.delegate as? AppDelegate)?.currentController,
-              let bundleID = controller.lastClientBundleID else { return }
-        Preferences.shared.rememberLanguageMode(Preferences.shared.isVietnameseMode, forBundleID: bundleID)
     }
 
     @objc private func handleSetInputMethod(_ sender: NSMenuItem) {
@@ -345,12 +360,6 @@ class StatusMenuController: NSObject {
     @objc private func handleToggleSuggestions(_ sender: NSMenuItem) {
         Preferences.shared.showSuggestions.toggle()
         debugLog("StatusMenu: showSuggestions → \(Preferences.shared.showSuggestions)")
-        refresh()
-    }
-
-    @objc private func handleToggleReduceUnderline(_ sender: NSMenuItem) {
-        Preferences.shared.reduceUnderlineThickness.toggle()
-        debugLog("StatusMenu: reduceUnderlineThickness → \(Preferences.shared.reduceUnderlineThickness)")
         refresh()
     }
 

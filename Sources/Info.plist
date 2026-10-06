@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleIdentifier</key>
-    <string>com.ahtstudio.inputmethod.VnKey</string>
+    <string>com.theodore.inputmethod.VnKey</string>
     <key>CFBundleName</key>
     <string>VnKey</string>
     <key>CFBundleDisplayName</key>
@@ -19,7 +19,7 @@
     <key>LSUIElement</key>
     <true/>
     <key>InputMethodConnectionName</key>
-    <string>com.ahtstudio.inputmethod.VnKey_Connection</string>
+    <string>com.theodore.inputmethod.VnKey_Connection</string>
     <key>InputMethodServerControllerClass</key>
     <string>VnInputController</string>
     <key>tsInputMethodCharacterRepertoireKey</key>
@@ -30,14 +30,14 @@
     <dict>
         <key>tsInputModeListKey</key>
         <dict>
-            <key>com.ahtstudio.inputmethod.VnKey.mac</key>
+            <key>com.theodore.inputmethod.VnKey.mac</key>
             <dict>
                 <key>tsInputModeIsActiveKey</key>
                 <true/>
                 <key>tsInputModeIsVisibleKey</key>
                 <true/>
                 <key>TISInputSourceID</key>
-                <string>com.ahtstudio.inputmethod.VnKey.mac</string>
+                <string>com.theodore.inputmethod.VnKey.mac</string>
                 <key>TISIntendedLanguage</key>
                 <string>vi</string>
                 <key>tsInputModeLanguagesKey</key>
@@ -54,7 +54,7 @@
         </dict>
         <key>tsVisibleInputModeOrderedArrayKey</key>
         <array>
-            <string>com.ahtstudio.inputmethod.VnKey.mac</string>
+            <string>com.theodore.inputmethod.VnKey.mac</string>
         </array>
     </dict>
 </dict>

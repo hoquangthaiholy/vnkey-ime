@@ -1,4 +1,4 @@
-"com.ahtstudio.inputmethod.VnKey" = "";
-"com.ahtstudio.inputmethod.VnKey.mac" = "VNKey";
-"CFBundleName" = "Settings";
-"CFBundleDisplayName" = "";
+"com.theodore.inputmethod.VnKey" = "VNKey";
+"com.theodore.inputmethod.VnKey.mac" = "VNKey";
+"CFBundleName" = "VNKey";
+"CFBundleDisplayName" = "VNKey";

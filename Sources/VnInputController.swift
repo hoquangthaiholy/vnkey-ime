@@ -52,14 +52,6 @@ class VnInputController: IMKInputController {
             return false
         }
 
-        // The ⌘⇧Space language toggle is handled by a real global hotkey
-        // (AppDelegate.registerGlobalToggleHotKey, via Carbon's
-        // RegisterEventHotKey) instead of here: Cmd-modified keystrokes are
-        // generally matched against the app's menu/responder chain as a
-        // shortcut *before* ever reaching an input method, so this handler
-        // never actually saw the keystroke in most apps (Terminal included) —
-        // they just beeped for the unclaimed shortcut instead of toggling.
-
         // Language mode: in English mode, act as a pure passthrough — never buffer
         // or transform keystrokes, let the client application handle them natively.
         if !Preferences.shared.isVietnameseMode {
@@ -314,26 +306,10 @@ class VnInputController: IMKInputController {
         return Self.underlineAttributes
     }
 
-    // NSTextView-based apps (TextEdit, Notes, Mail) always draw their own default
-    // underline under marked/composing text as a system-level "IME in progress"
-    // indicator — it cannot be suppressed. Explicitly requesting a thin, faint
-    // underline instead of leaving it unset replaces that (heavier) default with
-    // the least obtrusive style we can control. macOS gives IMEs no way to set an
-    // exact stroke width, so fading the color further is the only way to make it
-    // read as lighter — a dotted pattern was tried but renders *more* prominent,
-    // not less, since each dot needs enough size/spacing to stay visible.
-    //
-    // NSColor.tertiaryLabelColor already has a fairly low built-in alpha
-    // (~0.38-0.4 on macOS). withAlphaComponent *replaces* that value rather than
-    // scaling it, so the "reduced" alpha must be picked well below tertiary's own
-    // baseline — otherwise the "reduced" state ends up more opaque, not less.
     private static var underlineAttributes: [NSAttributedString.Key: Any] {
-        let color = Preferences.shared.reduceUnderlineThickness
-            ? NSColor.tertiaryLabelColor.withAlphaComponent(0.15)
-            : NSColor.tertiaryLabelColor
         return [
             .underlineStyle: NSUnderlineStyle.single.rawValue,
-            .underlineColor: color
+            .underlineColor: NSColor.tertiaryLabelColor
         ]
     }
 
@@ -342,10 +318,13 @@ class VnInputController: IMKInputController {
         if let appDelegate = NSApplication.shared.delegate as? AppDelegate {
             appDelegate.currentController = self
         }
-        if let client = sender as? IMKTextInput {
+        let targetClient = (sender as? IMKTextInput) ?? client()
+        if let client = targetClient {
             applyPerAppLanguageMemory(for: client)
+        } else if let bundleID = NSWorkspace.shared.frontmostApplication?.bundleIdentifier {
+            applyPerAppLanguageMemory(forBundleID: bundleID)
         }
-        NSLog("VNKEY_MENU_DEBUG activateServer – registered controller in AppDelegate")
+        NSLog("VNKEY_MENU_DEBUG activateServer")
         super.activateServer(sender)
     }
 
@@ -356,7 +335,13 @@ class VnInputController: IMKInputController {
     /// a mode for this app before, restore it — otherwise leave the current
     /// mode alone (so a never-seen app just keeps whatever was already active).
     private func applyPerAppLanguageMemory(for client: IMKTextInput) {
-        guard let bundleID = client.bundleIdentifier() else { return }
+        guard let bundleID = client.bundleIdentifier() ?? NSWorkspace.shared.frontmostApplication?.bundleIdentifier else { return }
+        applyPerAppLanguageMemory(forBundleID: bundleID)
+    }
+
+    private func applyPerAppLanguageMemory(forBundleID bundleID: String) {
+        let myBundleID = Bundle.main.bundleIdentifier ?? "com.theodore.inputmethod.VnKey"
+        if bundleID == myBundleID || bundleID == "\(myBundleID).mac" { return }
         lastClientBundleID = bundleID
 
         guard Preferences.shared.perAppLanguageMemory else { return }
@@ -371,25 +356,27 @@ class VnInputController: IMKInputController {
 
     /// Records whatever the language mode is right now against the given client's
     /// app — call this immediately after every user-initiated language toggle.
-    private func rememberCurrentLanguage(for client: IMKTextInput) {
-        lastClientBundleID = client.bundleIdentifier()
-        guard Preferences.shared.perAppLanguageMemory, let bundleID = lastClientBundleID else { return }
-        Preferences.shared.rememberLanguageMode(Preferences.shared.isVietnameseMode, forBundleID: bundleID)
+    private func rememberCurrentLanguage(for client: IMKTextInput?) {
+        let bundleID = client?.bundleIdentifier() ?? NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? lastClientBundleID
+        lastClientBundleID = bundleID
+        guard Preferences.shared.perAppLanguageMemory, let targetBundleID = lastClientBundleID else { return }
+        let myBundleID = Bundle.main.bundleIdentifier ?? "com.theodore.inputmethod.VnKey"
+        if targetBundleID == myBundleID || targetBundleID == "\(myBundleID).mac" { return }
+        Preferences.shared.rememberLanguageMode(Preferences.shared.isVietnameseMode, forBundleID: targetBundleID)
     }
 
-    /// Invoked by AppDelegate's global ⌘⇧Space hotkey (Carbon RegisterEventHotKey)
+    /// Invoked by AppDelegate's global ⌃⇧Space hotkey (Carbon RegisterEventHotKey)
     /// on whichever controller instance is currently active. Committing the
     /// in-progress composition first means nothing typed is lost when the
     /// language flips mid-word.
     @MainActor
     func handleGlobalLanguageToggle() {
-        if let client = client() {
+        let targetClient = client()
+        if let client = targetClient {
             commitComposition(client)
-            Preferences.shared.isVietnameseMode.toggle()
-            rememberCurrentLanguage(for: client)
-        } else {
-            Preferences.shared.isVietnameseMode.toggle()
         }
+        Preferences.shared.isVietnameseMode.toggle()
+        rememberCurrentLanguage(for: targetClient)
         StatusMenuController.shared.refresh()
     }
 

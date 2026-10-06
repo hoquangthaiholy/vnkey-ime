@@ -37,15 +37,16 @@ final class NextWordPredictorTests: XCTestCase {
         XCTAssertTrue(predictions.contains(rare))
     }
 
-    func testRecordTransitionIsCaseInsensitiveAndTrimsNothingButLowercases() {
-        let previous = uniqueWord("Prev")
-        let next = uniqueWord("Next")
+    func testLearnedWordPreservesOriginalCasing() {
+        let previous = uniqueWord("city")
+        let casedNext = "Hà Nội"
 
-        NextWordPredictor.shared.recordTransition(from: previous, to: next)
+        NextWordPredictor.shared.recordTransition(from: previous, to: casedNext)
 
-        // Looking up with different casing than what was recorded still matches.
-        XCTAssertTrue(NextWordPredictor.shared.predictNextWords(after: previous.uppercased())
-            .contains(next.lowercased()))
+        // Looking up with uppercase or lowercase matches and returns the exact original casing
+        let predictions = NextWordPredictor.shared.predictNextWords(after: previous.uppercased())
+        XCTAssertTrue(predictions.contains("Hà Nội"))
+        XCTAssertFalse(predictions.contains("hà nội"))
     }
 
     func testEmptyPreviousOrNextIsIgnored() {
@@ -65,5 +66,19 @@ final class NextWordPredictorTests: XCTestCase {
         }
         let predictions = NextWordPredictor.shared.predictNextWords(after: previous, limit: 100)
         XCTAssertLessThanOrEqual(predictions.count, 8)
+    }
+
+    func testUserFrequencyBoostsRankOverBaseline() {
+        let prev = "phát"
+        let initial = NextWordPredictor.shared.predictNextWords(after: prev)
+        XCTAssertTrue(initial.contains("triển"))
+
+        // User repeatedly types "phát biểu"
+        for _ in 0..<10 {
+            NextWordPredictor.shared.recordTransition(from: prev, to: "biểu")
+        }
+
+        let updated = NextWordPredictor.shared.predictNextWords(after: prev)
+        XCTAssertEqual(updated.first, "biểu")
     }
 }

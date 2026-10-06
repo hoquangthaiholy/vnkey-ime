@@ -18,7 +18,6 @@ public struct Preferences {
         static let isVietnameseMode = "isVietnameseMode"
         static let telexWAnywhere = "telexWAnywhere"
         static let telexBrackets = "telexBrackets"
-        static let reduceUnderlineThickness = "reduceUnderlineThickness"
         static let perAppLanguageMemory = "perAppLanguageMemory"
         static let perAppLanguageMap = "perAppLanguageMap"
         static let nextWordPredictionEnabled = "nextWordPredictionEnabled"
@@ -51,7 +50,7 @@ public struct Preferences {
     public var showSuggestions: Bool {
         get {
             if defaults.object(forKey: Keys.showSuggestions) == nil {
-                return false // default to hide
+                return true // default to show
             }
             return defaults.bool(forKey: Keys.showSuggestions)
         }
@@ -101,21 +100,6 @@ public struct Preferences {
         }
         set {
             defaults.set(newValue, forKey: Keys.telexBrackets)
-        }
-    }
-
-    /// When enabled, the underline shown under text being composed is drawn more
-    /// faded (lower opacity) — macOS gives IMEs no way to set an exact stroke
-    /// width, so a fainter color is the closest we can get to "thinner".
-    public var reduceUnderlineThickness: Bool {
-        get {
-            if defaults.object(forKey: Keys.reduceUnderlineThickness) == nil {
-                return false // default to the normal underline opacity
-            }
-            return defaults.bool(forKey: Keys.reduceUnderlineThickness)
-        }
-        set {
-            defaults.set(newValue, forKey: Keys.reduceUnderlineThickness)
         }
     }
 
