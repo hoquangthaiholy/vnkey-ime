@@ -36,11 +36,33 @@ class StatusMenuController: NSObject {
         item.menu = buildMenu()
         statusItem = item
         
+        // Listen for input source changes across the system via CF Distributed Notification Center
+        let distributedCenter = CFNotificationCenterGetDistributedCenter()
+        let observer = Unmanaged.passUnretained(self).toOpaque()
+        CFNotificationCenterAddObserver(
+            distributedCenter,
+            observer,
+            { (_, observer, _, _, _) in
+                guard let observer = observer else { return }
+                let controller = Unmanaged<StatusMenuController>.fromOpaque(observer).takeUnretainedValue()
+                DispatchQueue.main.async {
+                    MainActor.assumeIsolated {
+                        controller.inputSourceChanged()
+                    }
+                }
+            },
+            kTISNotifySelectedKeyboardInputSourceChanged,
+            nil,
+            .deliverImmediately
+        )
+        
+        // Also observe through Cocoa DistributedNotificationCenter with deliverImmediately
         DistributedNotificationCenter.default().addObserver(
             self,
             selector: #selector(inputSourceChanged),
             name: NSNotification.Name(kTISNotifySelectedKeyboardInputSourceChanged as String),
-            object: nil
+            object: nil,
+            suspensionBehavior: .deliverImmediately
         )
         
         NSWorkspace.shared.notificationCenter.addObserver(
@@ -54,6 +76,7 @@ class StatusMenuController: NSObject {
     }
 
     @objc private func applicationActivated(_ notification: Notification) {
+        updateButton()
         guard Preferences.shared.perAppLanguageMemory else { return }
         guard let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
               let bundleID = app.bundleIdentifier else {
@@ -79,23 +102,37 @@ class StatusMenuController: NSObject {
 
     @objc private func inputSourceChanged() {
         updateButton()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
+            self?.updateButton()
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
+            self?.updateButton()
+        }
     }
 
     private func isVnKeyActive() -> Bool {
-        let currentSource = TISCopyCurrentKeyboardInputSource().takeRetainedValue()
+        guard let currentSource = TISCopyCurrentKeyboardInputSource()?.takeRetainedValue() else {
+            return false
+        }
+        let myBundleID = Bundle.main.bundleIdentifier ?? "com.theodore.inputmethod.VnKey"
         if let idPtr = TISGetInputSourceProperty(currentSource, kTISPropertyInputSourceID) {
             let id = Unmanaged<CFString>.fromOpaque(idPtr).takeUnretainedValue() as String
-            let myBundleID = Bundle.main.bundleIdentifier ?? "com.theodore.inputmethod.VnKey"
-            // The actual input source ID defined in Info.plist has a ".mac" suffix
-            return id == myBundleID || id == "\(myBundleID).mac"
+            if id == myBundleID || id == "\(myBundleID).mac" || id.hasPrefix(myBundleID) {
+                return true
+            }
+        }
+        if let bundlePtr = TISGetInputSourceProperty(currentSource, kTISPropertyBundleID) {
+            let bundleID = Unmanaged<CFString>.fromOpaque(bundlePtr).takeUnretainedValue() as String
+            if bundleID == myBundleID || bundleID.hasPrefix(myBundleID) {
+                return true
+            }
         }
         return false
     }
 
-    private func createIconImage(text: String, isActive: Bool) -> NSImage {
+    private func createIconImage(text: String) -> NSImage {
         let font = NSFont.systemFont(ofSize: 11, weight: .medium)
-        let alpha: CGFloat = isActive ? 1.0 : 0.4
-        let color = NSColor.black.withAlphaComponent(alpha)
+        let color = NSColor.black
         let attributes: [NSAttributedString.Key: Any] = [
             .font: font,
             .foregroundColor: color
@@ -107,7 +144,7 @@ class StatusMenuController: NSObject {
         let separatorFont = NSFont.systemFont(ofSize: 10, weight: .regular)
         let separatorAttributes: [NSAttributedString.Key: Any] = [
             .font: separatorFont,
-            .foregroundColor: color.withAlphaComponent(alpha * 0.4),
+            .foregroundColor: color.withAlphaComponent(0.4),
             .baselineOffset: (font.pointSize - separatorFont.pointSize) / 2.0 + 1.0,
             .kern: 1.5
         ]
@@ -150,6 +187,15 @@ class StatusMenuController: NSObject {
     }
 
     private func updateButton() {
+        let active = isVnKeyActive()
+        guard let item = statusItem else { return }
+
+        // Completely hide the VNKey menu tray if VNKey is not the active system input source
+        item.isVisible = active
+        if !active {
+            return
+        }
+
         let name: String
         if !Preferences.shared.isVietnameseMode {
             name = "E"
@@ -161,9 +207,9 @@ class StatusMenuController: NSObject {
             }
             name = "V | \(methodName)"
         }
-        statusItem?.button?.title = ""
-        statusItem?.button?.image = createIconImage(text: name, isActive: isVnKeyActive())
-        statusItem?.button?.toolTip = "VnKey"
+        item.button?.title = ""
+        item.button?.image = createIconImage(text: name)
+        item.button?.toolTip = "VnKey"
     }
 
     // MARK: - Menu construction

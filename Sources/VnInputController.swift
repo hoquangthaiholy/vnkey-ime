@@ -347,6 +347,9 @@ class VnInputController: IMKInputController {
             applyPerAppLanguageMemory(forBundleID: bundleID)
         }
         NSLog("VNKEY_MENU_DEBUG activateServer")
+        MainActor.assumeIsolated {
+            StatusMenuController.shared.refresh()
+        }
         super.activateServer(sender)
     }
 
@@ -412,6 +415,9 @@ class VnInputController: IMKInputController {
         // Next-word context shouldn't leak across an app switch.
         lastCommittedWord = ""
         pendingNextWordSuggestions = []
+        MainActor.assumeIsolated {
+            StatusMenuController.shared.refresh()
+        }
         super.deactivateServer(sender)
     }
 
